@@ -3,6 +3,7 @@ package tg_bot
 import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"log"
+	"strings"
 )
 
 const (
@@ -28,10 +29,16 @@ func (b *TgBot) handleUpdates(updates tgbotapi.UpdatesChannel) {
 func (b *TgBot) handleMessage(message *tgbotapi.Message) {
 	log.Printf("[%s] %s", message.From.UserName, message.Text)
 
-	msg := tgbotapi.NewMessage(message.Chat.ID, message.Text)
-	msg.ReplyToMessageID = message.MessageID
+	if !strings.HasPrefix(message.Text, "https://www.youtube.com/") {
+		msg := tgbotapi.NewMessage(message.Chat.ID, "Please send a YouTube link")
+		msg.ReplyToMessageID = message.MessageID
 
-	b.bot.Send(msg)
+		b.bot.Send(msg)
+		return
+	}
+
+	videoURL := message.Text
+	downloadVideo(videoURL)
 }
 
 func (b *TgBot) handleCommand(message *tgbotapi.Message) error {
