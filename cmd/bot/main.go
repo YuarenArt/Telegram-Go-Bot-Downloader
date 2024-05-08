@@ -1,16 +1,33 @@
 package main
 
 import (
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"github.com/spf13/viper"
 	"log"
 	"youtube_downloader/pkg/tg_bot"
-
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
+func initConfig() {
+	viper.SetConfigName("config")
+	viper.AddConfigPath(".")
+	viper.AutomaticEnv()
+
+	if err := viper.ReadInConfig(); err != nil {
+		log.Fatalf("Error reading config file, %s", err)
+	}
+}
+
 func main() {
-	bot, err := tgbotapi.NewBotAPI("6979900763:AAFH_B1QpdIJXA87LXTRqwvhxgji8LAm9g4")
+	initConfig()
+
+	botToken := viper.GetString("TELEGRAM_BOT_TOKEN")
+	if botToken == "" {
+		log.Fatal("TELEGRAM_BOT_TOKEN must be set")
+	}
+
+	bot, err := tgbotapi.NewBotAPI(botToken)
 	if err != nil {
-		log.Panic(err)
+		log.Fatal(err)
 	}
 
 	tgBot := tg_bot.NewBot(bot)
