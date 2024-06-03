@@ -3,10 +3,10 @@ BINARY_NAME=dowload_bot.exe
 all: build
 
 build:
-	go build -o $(BINARY_NAME) cmd/bot/main.go
+	go build -o $(BINARY_NAME) main.go
 
 run:
-	go run cmd/bot/main.go
+	go run main.go
 
 clean:
 	go clean
