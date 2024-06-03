@@ -5,26 +5,32 @@ import (
 	"log"
 )
 
+// TgBot uses telegram-bot-api to maintain tg bot
+// It can download and send video with different formats (video/audio; quality)
 type TgBot struct {
 	bot *tgbotapi.BotAPI
 }
 
+// NewBot initializes a new TgBot instance with the given Telegram Bot API instance.
 func NewBot(bot *tgbotapi.BotAPI) *TgBot {
 	return &TgBot{bot: bot}
 }
 
-func (b *TgBot) StartBot() error {
-	log.Printf("Authorized on account %s", b.bot.Self.UserName)
+// StartBot starts the bot by authorizing it and initiating the update handling process.
+func (tb *TgBot) StartBot() error {
+	log.Printf("Authorized on account %s", tb.bot.Self.UserName)
 
-	updates := b.initUpdatesChannel()
-	b.handleUpdates(updates)
+	updates := tb.initUpdatesChannel()
+	tb.handleUpdates(updates)
 
 	return nil
 }
 
-func (b *TgBot) initUpdatesChannel() tgbotapi.UpdatesChannel {
+// initUpdatesChannel initializes the updates channel for receiving updates from the Telegram server.
+// It configures the update retrieval settings and returns the updates channel.
+func (tb *TgBot) initUpdatesChannel() tgbotapi.UpdatesChannel {
 	update := tgbotapi.NewUpdate(0)
 	update.Timeout = 60
 
-	return b.bot.GetUpdatesChan(update)
+	return tb.bot.GetUpdatesChan(update)
 }

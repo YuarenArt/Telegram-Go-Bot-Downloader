@@ -27,7 +27,7 @@ const (
 	FORMAT_MP3 = ".mp3"
 )
 
-func (b *TgBot) downloadVideo(videoURL string) (pathAndName string, err error) {
+func (tb *TgBot) downloadVideo(videoURL string) (pathAndName string, err error) {
 
 	dl := youtube_downloader.NewYouTubeDownloader()
 	dl.SetDownloadDir(DOWNLOAD_VIDEO_PREFIX)
@@ -41,7 +41,7 @@ func (b *TgBot) downloadVideo(videoURL string) (pathAndName string, err error) {
 	title := cleanVideoTitle(video.Title)
 
 	pathAndName = DOWNLOAD_VIDEO_PREFIX + title + FORMAT_MP4
-	if b.fileExists(pathAndName) {
+	if tb.fileExists(pathAndName) {
 		log.Print("File already exists, skipping download")
 		return pathAndName, nil
 	}
@@ -54,7 +54,7 @@ func (b *TgBot) downloadVideo(videoURL string) (pathAndName string, err error) {
 	format := formats[0]
 
 	ctx := context.Background()
-	if err := dl.DownloadVideo(ctx, video, &format, ""); err != nil {
+	if err := dl.DownloadVideoWithFormat(ctx, video, &format, ""); err != nil {
 		fmt.Println(err)
 	}
 
@@ -63,9 +63,8 @@ func (b *TgBot) downloadVideo(videoURL string) (pathAndName string, err error) {
 
 // TODO нужно правильно определять формат файла
 // downloadWithFormat download a file by a ling with a certain video format
-func (b *TgBot) downloadWithFormat(videoURL string, format youtube.Format) (pathAndName string, err error) {
+func (tb *TgBot) downloadWithFormat(videoURL string, format youtube.Format) (pathAndName string, err error) {
 	dl := youtube_downloader.NewYouTubeDownloader()
-	dl.SetDownloadDir(DOWNLOAD_PREFIX)
 
 	video, err := dl.GetVideo(videoURL)
 	if err != nil {
@@ -82,19 +81,19 @@ func (b *TgBot) downloadWithFormat(videoURL string, format youtube.Format) (path
 
 	pathAndName = DOWNLOAD_PREFIX + title + fileFormat
 
-	if b.fileExists(pathAndName) {
+	if tb.fileExists(pathAndName) {
 		log.Print("File already exists, skipping download")
 		return pathAndName, nil
 	}
 
 	ctx := context.Background()
-	if err := dl.DownloadVideo(ctx, video, &format, ""); err != nil {
+	if err := dl.DownloadVideoWithFormat(ctx, video, &format, ""); err != nil {
 		fmt.Println(err)
 	}
 
 	// changes any extension except .mp4 to .mp3
 	if fileFormat != ".mp4" {
-		if err = renameFileToMp3(DOWNLOAD_PREFIX + title + fileFormat); err != nil {
+		if err = changeFileExtensionToMp3(DOWNLOAD_PREFIX + title + fileFormat); err != nil {
 			log.Println("can't rename file: " + err.Error())
 		} else {
 			fileFormat = ".mp3"
@@ -105,20 +104,20 @@ func (b *TgBot) downloadWithFormat(videoURL string, format youtube.Format) (path
 	return pathAndName, nil
 }
 
-func (b *TgBot) sendFile(message *tgbotapi.Message, filePath string) error {
+func (tb *TgBot) sendFile(message *tgbotapi.Message, filePath string) error {
 
 	switch filepath.Ext(filePath) {
 	case ".mp4":
-		return b.sendVideo(message.Chat.ID, message.MessageID, filePath)
+		return tb.sendVideo(message.Chat.ID, message.MessageID, filePath)
 	case ".weba", ".mp3", ".m4a":
-		return b.sendAudio(message.Chat.ID, message.MessageID, filePath)
+		return tb.sendAudio(message.Chat.ID, message.MessageID, filePath)
 	default:
 		return errors.New("unknown extension")
 	}
 }
 
 // sendVideo sends to user video by chatID and MessageID
-func (b *TgBot) sendVideo(chatID int64, MessageID int, filePath string) error {
+func (tb *TgBot) sendVideo(chatID int64, MessageID int, filePath string) error {
 
 	log.Print("Start sending: " + filePath)
 
@@ -128,7 +127,7 @@ func (b *TgBot) sendVideo(chatID int64, MessageID int, filePath string) error {
 	videoName := path.Base(filePath)
 	video.Caption = videoName
 
-	_, err := b.bot.Send(video)
+	_, err := tb.bot.Send(video)
 	if err != nil {
 		log.Printf("Can't send file: %w", err.Error())
 		return err
@@ -137,7 +136,7 @@ func (b *TgBot) sendVideo(chatID int64, MessageID int, filePath string) error {
 	return err
 }
 
-func (b *TgBot) sendAudio(chatID int64, MessageID int, filePath string) error {
+func (tb *TgBot) sendAudio(chatID int64, MessageID int, filePath string) error {
 
 	log.Print("Start sending: " + filePath)
 
@@ -147,7 +146,7 @@ func (b *TgBot) sendAudio(chatID int64, MessageID int, filePath string) error {
 	audioName := path.Base(filePath)
 	audio.Caption = audioName
 
-	_, err := b.bot.Send(audio)
+	_, err := tb.bot.Send(audio)
 	if err != nil {
 		log.Printf("Can't send file: %w", err.Error())
 		return err
@@ -157,7 +156,7 @@ func (b *TgBot) sendAudio(chatID int64, MessageID int, filePath string) error {
 }
 
 // fileExists return true if file with filePath exist
-func (b *TgBot) fileExists(filePath string) bool {
+func (tb *TgBot) fileExists(filePath string) bool {
 	_, err := os.Stat(filePath)
 	return !os.IsNotExist(err)
 }
@@ -184,7 +183,7 @@ func getFormatByMimeType(mimeType string) (string, error) {
 	}
 }
 
-func renameFileToMp3(filePath string) error {
+func changeFileExtensionToMp3(filePath string) error {
 	fileName := strings.TrimSuffix(filepath.Base(filePath), filepath.Ext(filePath))
 	fileDir := filepath.Dir(filePath)
 	newFilePath := fileDir + "/" + fileName + ".mp3"

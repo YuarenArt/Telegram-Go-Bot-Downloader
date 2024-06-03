@@ -27,7 +27,7 @@ func NewYouTubeDownloader() *YouTubeDownloader {
 	return &YouTubeDownloader{
 		Downloader: downloader.Downloader{
 			Client:    youtube.Client{},
-			OutputDir: "",
+			OutputDir: "download/",
 		},
 	}
 }
@@ -46,7 +46,8 @@ func (ytd *YouTubeDownloader) GetVideo(videoURL string) (*youtube.Video, error) 
 	return video, err
 }
 
-func (ytd *YouTubeDownloader) DownloadVideo(
+// DownloadVideoWithFormat download a video according to a format
+func (ytd *YouTubeDownloader) DownloadVideoWithFormat(
 	ctx context.Context,
 	video *youtube.Video,
 	format *youtube.Format,
@@ -59,7 +60,7 @@ func (ytd *YouTubeDownloader) DownloadVideo(
 	return nil
 }
 
-// WithFormats returns a new FormatList that contains only the formats
+// WithFormats returns a new FormatList that contains only a formats
 // from the given list that have the following prefix (i.e "video/", "audio/")
 func WithFormats(list *youtube.FormatList, prefix string) (youtube.FormatList, error) {
 	var result youtube.FormatList
@@ -77,7 +78,8 @@ func WithFormats(list *youtube.FormatList, prefix string) (youtube.FormatList, e
 	return result, nil
 }
 
-func GetFormatWithAudioChannels(videoURL string) (youtube.FormatList, error) {
+// FormatWithAudioChannels return a new FormatList that contains only a formats with audio
+func FormatWithAudioChannels(videoURL string) (youtube.FormatList, error) {
 	client := youtube.Client{}
 	video, err := client.GetVideo(videoURL)
 	if err != nil {

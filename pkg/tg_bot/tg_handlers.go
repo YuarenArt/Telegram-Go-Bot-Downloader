@@ -5,6 +5,7 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/kkdai/youtube/v2"
 	"log"
+	"os"
 	"strconv"
 	"strings"
 	youtube_downloader "youtube_downloader/pkg/downloader/youtube-downloader"
@@ -26,6 +27,8 @@ const (
 	sendingNotification     = " 🚀 Sending... 🚀"
 )
 
+// TODO сделать многопоточную раюоту так чтобы после того видео загрузилось
+// и начло отправляться можно было скачивать и отправлять нвоое
 // TODO если пользовательно нажемет кнопку остановить и блокировать то происходит panic
 // handleUpdates gets updates from telegramAPI and handle it
 func (b *TgBot) handleUpdates(updates tgbotapi.UpdatesChannel) {
@@ -42,10 +45,10 @@ func (b *TgBot) handleUpdates(updates tgbotapi.UpdatesChannel) {
 	}
 }
 
-// handleMessage checks the message
-// If it is a command, handle command
-// If it is a link, handle the link
-// Unless, just handles default and help command
+// handleMessage processes an incoming message.
+// If the message contains a command, it handles the command.
+// If the message contains a link, it handles the link.
+// Otherwise, it handles default and help commands.
 func (b *TgBot) handleMessage(message *tgbotapi.Message) {
 	log.Printf("[%s] %s", message.From.UserName, message.Text)
 
@@ -65,7 +68,6 @@ func (b *TgBot) handleMessage(message *tgbotapi.Message) {
 
 	b.handleDefaultCommand(message)
 	b.handleHelpCommand(message)
-
 }
 
 // handleCommand handles supported commands
@@ -73,10 +75,8 @@ func (b *TgBot) handleCommand(message *tgbotapi.Message) error {
 	switch message.Command() {
 	case commandStart:
 		return b.handleStartCommand(message)
-
 	case commandHelp:
 		return b.handleHelpCommand(message)
-
 	default:
 		return b.handleDefaultCommand(message)
 	}
@@ -97,14 +97,14 @@ func (b *TgBot) handleDefaultCommand(message *tgbotapi.Message) error {
 	return b.sendMessage(message, defaultMessage)
 }
 
-// handleYoutubeLink gets all possible formats of the video by link
+// handleYoutubeLink gets all possible formats of the video by a link
 // creates a keyboard and sends it to user's chat
 func (b *TgBot) handleYoutubeLink(message *tgbotapi.Message) error {
 
 	videoURL := message.Text
-	formats, err := youtube_downloader.GetFormatWithAudioChannels(videoURL)
+	formats, err := youtube_downloader.FormatWithAudioChannels(videoURL)
 	if err != nil {
-		log.Printf("GetFormatWithAudioChannels return %w", err)
+		log.Printf("FormatWithAudioChannels return %w", err)
 		return err
 	}
 
@@ -134,9 +134,9 @@ func (b *TgBot) handleCallbackQuery(callbackQuery *tgbotapi.CallbackQuery) {
 	parts := strings.Split(text, "\n")
 	videoURL := parts[1]
 
-	formats, err := youtube_downloader.GetFormatWithAudioChannels(videoURL)
+	formats, err := youtube_downloader.FormatWithAudioChannels(videoURL)
 	if err != nil {
-		log.Printf("GetFormatWithAudioChannels return %w in handleCallbackQuery", err)
+		log.Printf("FormatWithAudioChannels return %w in handleCallbackQuery", err)
 	}
 
 	mimeType := callbackQuery.Data
@@ -153,8 +153,15 @@ func (b *TgBot) handleCallbackQuery(callbackQuery *tgbotapi.CallbackQuery) {
 		log.Printf("sendFile return %w in handleCallbackQuery", err)
 	}
 
-	//TODO удалить файл после отправки
+	// deletes file after sending
+	err = deleteFile(pathAndName)
+	if err != nil {
+		log.Printf("deleteFile return %w in handleCallbackQuery", err)
+	}
+}
 
+func deleteFile(pathToFile string) error {
+	return os.Remove(pathToFile)
 }
 
 // getKeyboard return InlineKeyboardMarkup by all possible video formats
