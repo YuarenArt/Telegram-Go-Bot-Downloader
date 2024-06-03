@@ -25,6 +25,7 @@ func main() {
 		log.Fatal("TELEGRAM_BOT_TOKEN must be set")
 	}
 
+	// tgbotapi.NewBotAPIWithAPIEndpoint(botToken, botAPIURL)
 	bot, err := tgbotapi.NewBotAPI(botToken)
 	if err != nil {
 		log.Fatal(err)
