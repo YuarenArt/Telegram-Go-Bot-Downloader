@@ -61,9 +61,13 @@ func (tb *TgBot) downloadVideo(videoURL string) (pathAndName string, err error) 
 	return pathAndName, nil
 }
 
-// TODO нужно правильно определять формат файла
 // downloadWithFormat download a file by a ling with a certain video format
 func (tb *TgBot) downloadWithFormat(videoURL string, format youtube.Format) (pathAndName string, err error) {
+
+	if !isAcceptableFileSize(format) {
+		return "", fmt.Errorf("file's size to large. Acceptable size is %f.2 Mb", maxFileSize/(1024*1024))
+	}
+
 	dl := youtube_downloader.NewYouTubeDownloader()
 
 	video, err := dl.GetVideo(videoURL)
