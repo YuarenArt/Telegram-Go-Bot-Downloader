@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-var SuppotedPrefixesFormat = []string{
+var SupportedPrefixesFormat = []string{
 	"video/",
 	"audio/",
 }
@@ -33,7 +33,7 @@ func NewYouTubeDownloader() *YouTubeDownloader {
 }
 
 // GetVideo retrieves a YouTube video by its URL and returns a pointer to a
-// youtube.Video struct that contains the video's metadata
+// YouTube.Video struct that contains the video's metadata
 func (ytd *YouTubeDownloader) GetVideo(videoURL string) (*youtube.Video, error) {
 	log.Printf("Getting video from URL: %s", videoURL)
 
@@ -65,7 +65,7 @@ func (ytd *YouTubeDownloader) DownloadVideoWithFormat(
 func WithFormats(list *youtube.FormatList, prefix string) (youtube.FormatList, error) {
 	var result youtube.FormatList
 
-	if !contains(SuppotedPrefixesFormat, prefix) {
+	if !contains(SupportedPrefixesFormat, prefix) {
 		return nil, fmt.Errorf("unsupported prefix: %s", prefix)
 	}
 
