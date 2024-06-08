@@ -38,3 +38,14 @@ func (tb *TgBot) sendKeyboardMessage(message *tgbotapi.Message, keyboard tgbotap
 	_, err := tb.bot.Send(msg)
 	return err
 }
+
+func (tb *TgBot) sendKeyboardMessageWithFormattedLink(message *tgbotapi.Message, keyboard tgbotapi.InlineKeyboardMarkup, videoURL string) error {
+	msg := tgbotapi.NewMessage(message.Chat.ID,
+		fmt.Sprintf("Your link:\n"+
+			"%s"+
+			"\nChoose a format:", videoURL),
+	)
+	msg.ReplyMarkup = keyboard
+	_, err := tb.bot.Send(msg)
+	return err
+}
