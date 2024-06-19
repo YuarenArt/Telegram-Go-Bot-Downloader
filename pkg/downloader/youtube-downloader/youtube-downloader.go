@@ -91,6 +91,12 @@ func FormatWithAudioChannels(videoURL string) (youtube.FormatList, error) {
 	return formats, nil
 }
 
+func FormatWithAudioChannelsByVideo(video *youtube.Video) (youtube.FormatList, error) {
+	formats := video.Formats.WithAudioChannels()
+	return formats, nil
+}
+
+// contains return true if item in slice
 func contains(slice []string, item string) bool {
 	for _, a := range slice {
 		if a == item {

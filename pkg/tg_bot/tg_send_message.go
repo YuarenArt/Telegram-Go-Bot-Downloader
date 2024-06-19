@@ -32,7 +32,7 @@ func (tb *TgBot) sendKeyboardMessage(message *tgbotapi.Message, keyboard tgbotap
 	msg := tgbotapi.NewMessage(message.Chat.ID,
 		fmt.Sprintf("Your link:\n"+
 			"%s"+
-			"\nChoose a format:", message.Text),
+			"\nChoose a format or video:", message.Text),
 	)
 	msg.ReplyMarkup = keyboard
 	_, err := tb.bot.Send(msg)

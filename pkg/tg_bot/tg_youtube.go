@@ -16,9 +16,7 @@ import (
 )
 
 const (
-	DOWNLOAD_VIDEO_PREFIX = "download/video/"
-	DOWNLOAD_AUDIO_PREFIX = "download/audio/"
-	DOWNLOAD_PREFIX       = "download/"
+	DOWNLOAD_PREFIX = "download/"
 
 	VIDEO_PREFIX = "video/"
 	AUDIO_PREFIX = "audio/"
@@ -27,24 +25,12 @@ const (
 	FORMAT_MP3 = ".mp3"
 )
 
-func (tb *TgBot) downloadVideo(videoURL string) (pathAndName string, err error) {
+func (tb *TgBot) downloadVideo(video *youtube.Video) (pathAndName string, err error) {
 
 	dl := youtube_downloader.NewYouTubeDownloader()
-	dl.SetDownloadDir(DOWNLOAD_VIDEO_PREFIX)
-
-	video, err := dl.GetVideo(videoURL)
-	if err != nil {
-		log.Print(err)
-		return "", err
-	}
 
 	title := cleanVideoTitle(video.Title)
-
-	pathAndName = DOWNLOAD_VIDEO_PREFIX + title + FORMAT_MP4
-	if tb.fileExists(pathAndName) {
-		log.Print("File already exists, skipping download")
-		return pathAndName, nil
-	}
+	pathAndName = DOWNLOAD_PREFIX + title + FORMAT_MP4
 
 	formats := video.Formats.WithAudioChannels()
 	formats, err = youtube_downloader.WithFormats(&formats, VIDEO_PREFIX)
@@ -61,11 +47,11 @@ func (tb *TgBot) downloadVideo(videoURL string) (pathAndName string, err error) 
 	return pathAndName, nil
 }
 
-// downloadWithFormat download a file by a ling with a certain video format
+// downloadWithFormat download a file by a link with a certain video format
 func (tb *TgBot) downloadWithFormat(videoURL string, format youtube.Format) (pathAndName string, err error) {
 
 	if !isAcceptableFileSize(format) {
-		return "", fmt.Errorf("file's size to large. Acceptable size is %f.2 Mb", maxFileSize/(1024*1024))
+		return "", fmt.Errorf("file's size to large. Acceptable size is %.2f Mb", maxFileSize/(1024*1024))
 	}
 
 	dl := youtube_downloader.NewYouTubeDownloader()
@@ -108,6 +94,7 @@ func (tb *TgBot) downloadWithFormat(videoURL string, format youtube.Format) (pat
 	return pathAndName, nil
 }
 
+// sendFile send file according its type
 func (tb *TgBot) sendFile(message *tgbotapi.Message, filePath string) error {
 
 	switch filepath.Ext(filePath) {
