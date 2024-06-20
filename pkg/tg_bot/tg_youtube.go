@@ -37,11 +37,45 @@ func (tb *TgBot) downloadVideo(video *youtube.Video) (pathAndName string, err er
 	if err != nil {
 		log.Printf("failed to get %s formats: %w", VIDEO_PREFIX, err)
 	}
-	format := formats[0]
+	formats.Sort()
+	format := formats[len(formats)-1]
 
 	ctx := context.Background()
 	if err := dl.DownloadVideoWithFormat(ctx, video, &format, ""); err != nil {
 		fmt.Println(err)
+	}
+
+	return pathAndName, nil
+}
+
+func (tb *TgBot) downloadAudio(video *youtube.Video) (pathAndName string, err error) {
+	dl := youtube_downloader.NewYouTubeDownloader()
+
+	title := cleanVideoTitle(video.Title)
+
+	formats := video.Formats.WithAudioChannels()
+	formats, err = youtube_downloader.WithFormats(&formats, AUDIO_PREFIX)
+	if err != nil {
+		log.Printf("failed to get %s formats: %w", VIDEO_PREFIX, err)
+	}
+
+	format := formats[0]
+	ctx := context.Background()
+	if err := dl.DownloadVideoWithFormat(ctx, video, &format, ""); err != nil {
+		fmt.Println(err)
+	}
+
+	fileFormat, err := getFormatByMimeType(format.MimeType)
+	pathAndName = DOWNLOAD_PREFIX + title + fileFormat
+
+	// changes any extension except .mp4 to .mp3
+	if fileFormat != ".mp4" {
+		if err = changeFileExtensionToMp3(DOWNLOAD_PREFIX + title + fileFormat); err != nil {
+			log.Println("can't rename file: " + err.Error())
+		} else {
+			fileFormat = ".mp3"
+			pathAndName = DOWNLOAD_PREFIX + title + fileFormat
+		}
 	}
 
 	return pathAndName, nil

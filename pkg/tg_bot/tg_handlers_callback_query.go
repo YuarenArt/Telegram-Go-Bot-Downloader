@@ -11,6 +11,11 @@ import (
 	youtube_downloader "youtube_downloader/pkg/downloader/youtube-downloader"
 )
 
+const (
+	All_video = "allVideo"
+	All_audio = "allAudio"
+)
+
 func (tb *TgBot) handleCallbackQuery(callbackQuery *tgbotapi.CallbackQuery) {
 
 	text := callbackQuery.Message.Text
@@ -34,7 +39,13 @@ func (tb *TgBot) handleCallbackQueryWithFormats(callbackQuery *tgbotapi.Callback
 
 	text := callbackQuery.Message.Text
 	parts := strings.Split(text, "\n")
-	videoURL := parts[1]
+	var videoURL string
+	for _, part := range parts {
+		if strings.HasPrefix(part, "https://") {
+			videoURL = part
+			break
+		}
+	}
 
 	formats, err := youtube_downloader.FormatWithAudioChannels(videoURL)
 	if err != nil {
@@ -87,9 +98,103 @@ func (tb *TgBot) handleCallbackQueryWithFormats(callbackQuery *tgbotapi.Callback
 	}()
 }
 
+// handleCallbackQueryWithPlaylist gets link on playlist by callbackQuery.Message.Text
+// checks callbackQuery.Data
+// if callbackQuery.Data == All_audio : download all videos from playlist in audio format
+// if callbackQuery.Data == All_video : download all videos from playlist in video format
+// else download a certain video by callbackQuery.Data(playlistEntry.ID)
 func (tb *TgBot) handleCallbackQueryWithPlaylist(callbackQuery *tgbotapi.CallbackQuery) {
 
+	text := callbackQuery.Message.Text
+	parts := strings.Split(text, "\n")
+	var playlistURL string
+	for _, part := range parts {
+		if strings.HasPrefix(part, "https://") {
+			playlistURL = part
+			break
+		}
+	}
+
+	downloader := youtube_downloader.NewYouTubeDownloader()
+	playlist, err := downloader.Downloader.Client.GetPlaylist(playlistURL)
+	if err != nil {
+		log.Printf("GetPlaylist in handleCallbackQueryWithPlaylist error: %w", err)
+	}
+
+	switch {
+	case callbackQuery.Data == All_audio:
+		var video *youtube.Video
+		for _, playlistEntry := range playlist.Videos {
+			video, err = downloader.Downloader.Client.VideoFromPlaylistEntry(playlistEntry)
+
+			path, err := tb.downloadAudio(video)
+			if err != nil {
+				log.Printf("downloadVideo in handleCallbackQueryWithPlaylist error: %w", err)
+			}
+
+			err = tb.sendFile(callbackQuery.Message, path)
+			if err != nil {
+				log.Printf("sendFile in handleCallbackQueryWithPlaylist error: %s", err)
+				tb.sendReplyMessage(callbackQuery.Message, "File Too Large: max files size is "+strconv.Itoa(maxFileSize/(1024*1024))+" Mb")
+			}
+		}
+
+	case callbackQuery.Data == All_video:
+
+		var video *youtube.Video
+		for _, playlistEntry := range playlist.Videos {
+			video, err = downloader.Downloader.Client.VideoFromPlaylistEntry(playlistEntry)
+
+			path, err := tb.downloadVideo(video)
+			if err != nil {
+				log.Printf("downloadVideo in handleCallbackQueryWithPlaylist error: %w", err)
+			}
+
+			err = tb.sendFile(callbackQuery.Message, path)
+			if err != nil {
+				log.Printf("sendFile in handleCallbackQueryWithPlaylist error: %w", err)
+				tb.sendReplyMessage(callbackQuery.Message, "File Too Large: max files size is "+strconv.Itoa(maxFileSize))
+			}
+
+			err = deleteFile(path)
+			if err != nil {
+				log.Printf("deleteFile return %w in handleCallbackQuery", err)
+			}
+		}
+
+	default:
+
+		var video *youtube.Video
+		for _, playlistEntry := range playlist.Videos {
+			if playlistEntry.ID == callbackQuery.Data {
+				video, err = downloader.Downloader.Client.VideoFromPlaylistEntry(playlistEntry)
+				break
+			}
+		}
+
+		path, err := tb.downloadVideo(video)
+		if err != nil {
+			log.Printf("downloadVideo in handleCallbackQueryWithPlaylist error: %w", err)
+		}
+
+		err = tb.sendFile(callbackQuery.Message, path)
+		if err != nil {
+			log.Printf("sendFile in handleCallbackQueryWithPlaylist error: %w", err)
+			tb.sendReplyMessage(callbackQuery.Message, "Request Entity Too Large")
+		}
+
+		// deletes file after sending
+		defer func() {
+			err := deleteFile(path)
+			if err != nil {
+				log.Printf("deleteFile return %w in handleCallbackQuery", err)
+			}
+		}()
+
+	}
 }
+
+//func (tb *TgBot)
 
 // getKeyboard return InlineKeyboardMarkup by all possible video formats
 func getKeyboardVideoFormats(formats youtube.FormatList) (tgbotapi.InlineKeyboardMarkup, error) {
@@ -115,6 +220,26 @@ func getKeyboardVideoFormats(formats youtube.FormatList) (tgbotapi.InlineKeyboar
 	}
 
 	return keyboard, nil
+}
+
+func getKeyboardPlaylist(playlist *youtube.Playlist) tgbotapi.InlineKeyboardMarkup {
+	keyboard := tgbotapi.NewInlineKeyboardMarkup()
+
+	button := tgbotapi.NewInlineKeyboardButtonData(
+		fmt.Sprintf("%s", "Download all: video"), All_video)
+	keyboard.InlineKeyboard = append(keyboard.InlineKeyboard, []tgbotapi.InlineKeyboardButton{button})
+
+	button = tgbotapi.NewInlineKeyboardButtonData(
+		fmt.Sprintf("%s", "Download all: audio"), All_audio)
+	keyboard.InlineKeyboard = append(keyboard.InlineKeyboard, []tgbotapi.InlineKeyboardButton{button})
+
+	for _, playlistEntry := range playlist.Videos {
+		button := tgbotapi.NewInlineKeyboardButtonData(
+			fmt.Sprintf("%s", playlistEntry.Title), playlistEntry.ID)
+		keyboard.InlineKeyboard = append(keyboard.InlineKeyboard, []tgbotapi.InlineKeyboardButton{button})
+	}
+
+	return keyboard
 }
 
 // getFileSize return a file size in bite of certain format
