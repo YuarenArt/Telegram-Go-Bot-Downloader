@@ -1,7 +1,6 @@
 package tg_bot
 
 import (
-	"errors"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/kkdai/youtube/v2"
 	"log"
@@ -51,15 +50,16 @@ func (tb *TgBot) handleUpdates(updates tgbotapi.UpdatesChannel) {
 func (tb *TgBot) handleMessage(message *tgbotapi.Message) {
 	log.Printf("[%s] %s", message.From.UserName, message.Text)
 
-	if strings.HasPrefix(message.Text, "https://www.youtube.com/") ||
-		strings.HasPrefix(message.Text, "https://youtube.com/playlist") {
-
+	// handle youtube link
+	if isYoutubeLink(message.Text) {
 		err := tb.handleYoutubeLink(message)
 		if err != nil {
 			log.Print(err)
 			errMsg := err.Error()
 			if errMsg == "Request Entity Too Large" {
 				tb.sendReplyMessage(message, "Your file too large")
+			} else if errMsg == "extractVideoID failed: invalid characters in video id" {
+				tb.sendReplyMessage(message, "Your link incorrect. Just send a link")
 			} else {
 				tb.sendReplyMessage(message, "Something went wrong")
 			}
@@ -83,12 +83,16 @@ func (tb *TgBot) handleYoutubeLink(message *tgbotapi.Message) error {
 	default:
 		return tb.handleYoutubeVideo(message)
 	}
-
-	return errors.New("out of switch body in handleYoutubeLink method")
 }
 
 // isAcceptableFileSize return true if file size less than possible size to send to tg API
 func isAcceptableFileSize(format youtube.Format) bool {
 	fileSize, _ := getFileSize(format)
 	return fileSize < maxFileSize
+}
+
+func isYoutubeLink(link string) bool {
+	return strings.HasPrefix(link, "https://www.youtube.com/") ||
+		strings.HasPrefix(link, "https://youtube.com/playlist") ||
+		strings.HasPrefix(link, "https://youtu.be")
 }
