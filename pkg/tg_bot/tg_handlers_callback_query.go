@@ -16,6 +16,8 @@ const (
 	All_audio = "allAudio"
 )
 
+// handleCallbackQuery gets url from bot's message with a replying link,
+// then handle a link by its type: video (stream), playlist
 func (tb *TgBot) handleCallbackQuery(callbackQuery *tgbotapi.CallbackQuery) {
 
 	text := callbackQuery.Message.Text

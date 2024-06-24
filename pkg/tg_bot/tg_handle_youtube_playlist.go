@@ -9,6 +9,11 @@ import (
 	youtube_downloader "youtube_downloader/pkg/downloader/youtube-downloader"
 )
 
+// TODO добавить возможность выбирать качесвто видео
+
+// handleYoutubePlaylist gets playlist,
+// creates keyboard with all videos from it,
+// send keyboard to user's chat
 func (tb *TgBot) handleYoutubePlaylist(message *tgbotapi.Message) error {
 
 	playlistURL := message.Text
@@ -60,6 +65,10 @@ func (tb *TgBot) processPlaylistAudio(callbackQuery *tgbotapi.CallbackQuery, pla
 		if err := tb.sendFile(callbackQuery.Message, path); err != nil {
 			log.Printf("sendFile error: %v", err)
 			tb.sendReplyMessage(callbackQuery.Message, "File Too Large: max files size is "+strconv.Itoa(maxFileSize/(1024*1024))+" Mb")
+		}
+
+		if err := deleteFile(path); err != nil {
+			log.Printf("deleteFile error: %v", err)
 		}
 	}
 }
