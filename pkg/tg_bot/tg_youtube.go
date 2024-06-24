@@ -25,6 +25,7 @@ const (
 	FORMAT_MP3 = ".mp3"
 )
 
+// downloadVideo download video with the lowest quality
 func (tb *TgBot) downloadVideo(video *youtube.Video) (pathAndName string, err error) {
 
 	dl := youtube_downloader.NewYouTubeDownloader()
@@ -48,6 +49,7 @@ func (tb *TgBot) downloadVideo(video *youtube.Video) (pathAndName string, err er
 	return pathAndName, nil
 }
 
+// downloadAudio download audio with the highest quality
 func (tb *TgBot) downloadAudio(video *youtube.Video) (pathAndName string, err error) {
 	dl := youtube_downloader.NewYouTubeDownloader()
 
@@ -58,7 +60,7 @@ func (tb *TgBot) downloadAudio(video *youtube.Video) (pathAndName string, err er
 	if err != nil {
 		log.Printf("failed to get %s formats: %w", VIDEO_PREFIX, err)
 	}
-
+	formats.Sort()
 	format := formats[0]
 	ctx := context.Background()
 	if err := dl.DownloadVideoWithFormat(ctx, video, &format, ""); err != nil {
@@ -117,12 +119,10 @@ func (tb *TgBot) downloadWithFormat(videoURL string, format youtube.Format) (pat
 
 	// changes any extension except .mp4 to .mp3
 	if fileFormat != ".mp4" {
-		if err = changeFileExtensionToMp3(DOWNLOAD_PREFIX + title + fileFormat); err != nil {
-			log.Println("can't rename file: " + err.Error())
-		} else {
-			fileFormat = ".mp3"
-			pathAndName = DOWNLOAD_PREFIX + title + fileFormat
+		if err := changeFileExtensionToMp3(pathAndName); err != nil {
+			return "", fmt.Errorf("can't rename file: %v", err)
 		}
+		pathAndName = DOWNLOAD_PREFIX + title + ".mp3"
 	}
 
 	return pathAndName, nil
@@ -161,6 +161,7 @@ func (tb *TgBot) sendVideo(chatID int64, MessageID int, filePath string) error {
 	return err
 }
 
+// sendAudio sends to user audio by chatID and MessageID
 func (tb *TgBot) sendAudio(chatID int64, MessageID int, filePath string) error {
 
 	log.Print("Start sending: " + filePath)
@@ -180,7 +181,7 @@ func (tb *TgBot) sendAudio(chatID int64, MessageID int, filePath string) error {
 	return err
 }
 
-// fileExists return true if file with filePath exist
+// fileExists return true if file with filePath exists
 func (tb *TgBot) fileExists(filePath string) bool {
 	_, err := os.Stat(filePath)
 	return !os.IsNotExist(err)

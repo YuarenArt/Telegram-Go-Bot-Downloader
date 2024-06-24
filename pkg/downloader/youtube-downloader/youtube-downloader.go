@@ -60,6 +60,14 @@ func (ytd *YouTubeDownloader) DownloadVideoWithFormat(
 	return nil
 }
 
+func (ytd *YouTubeDownloader) GetPlaylist(url string) (*youtube.Playlist, error) {
+	return ytd.Downloader.Client.GetPlaylist(url)
+}
+
+func (ytd *YouTubeDownloader) GetVideoFromPlaylistEntry(entry *youtube.PlaylistEntry) (*youtube.Video, error) {
+	return ytd.Downloader.Client.VideoFromPlaylistEntry(entry)
+}
+
 // WithFormats returns a new FormatList that contains only a formats
 // from the given list that have the following prefix (i.e "video/", "audio/")
 func WithFormats(list *youtube.FormatList, prefix string) (youtube.FormatList, error) {

@@ -104,97 +104,24 @@ func (tb *TgBot) handleCallbackQueryWithFormats(callbackQuery *tgbotapi.Callback
 // if callbackQuery.Data == All_video : download all videos from playlist in video format
 // else download a certain video by callbackQuery.Data(playlistEntry.ID)
 func (tb *TgBot) handleCallbackQueryWithPlaylist(callbackQuery *tgbotapi.CallbackQuery) {
-
-	text := callbackQuery.Message.Text
-	parts := strings.Split(text, "\n")
-	var playlistURL string
-	for _, part := range parts {
-		if strings.HasPrefix(part, "https://") {
-			playlistURL = part
-			break
-		}
-	}
-
+	playlistURL := extractPlaylistURL(callbackQuery.Message.Text)
 	downloader := youtube_downloader.NewYouTubeDownloader()
-	playlist, err := downloader.Downloader.Client.GetPlaylist(playlistURL)
+
+	playlist, err := downloader.GetPlaylist(playlistURL)
 	if err != nil {
-		log.Printf("GetPlaylist in handleCallbackQueryWithPlaylist error: %w", err)
+		log.Printf("GetPlaylist in handleCallbackQueryWithPlaylist error: %v", err)
+		return
 	}
 
 	switch {
 	case callbackQuery.Data == All_audio:
-		var video *youtube.Video
-		for _, playlistEntry := range playlist.Videos {
-			video, err = downloader.Downloader.Client.VideoFromPlaylistEntry(playlistEntry)
-
-			path, err := tb.downloadAudio(video)
-			if err != nil {
-				log.Printf("downloadVideo in handleCallbackQueryWithPlaylist error: %w", err)
-			}
-
-			err = tb.sendFile(callbackQuery.Message, path)
-			if err != nil {
-				log.Printf("sendFile in handleCallbackQueryWithPlaylist error: %s", err)
-				tb.sendReplyMessage(callbackQuery.Message, "File Too Large: max files size is "+strconv.Itoa(maxFileSize/(1024*1024))+" Mb")
-			}
-		}
-
+		tb.processPlaylistAudio(callbackQuery, playlist)
 	case callbackQuery.Data == All_video:
-
-		var video *youtube.Video
-		for _, playlistEntry := range playlist.Videos {
-			video, err = downloader.Downloader.Client.VideoFromPlaylistEntry(playlistEntry)
-
-			path, err := tb.downloadVideo(video)
-			if err != nil {
-				log.Printf("downloadVideo in handleCallbackQueryWithPlaylist error: %w", err)
-			}
-
-			err = tb.sendFile(callbackQuery.Message, path)
-			if err != nil {
-				log.Printf("sendFile in handleCallbackQueryWithPlaylist error: %w", err)
-				tb.sendReplyMessage(callbackQuery.Message, "File Too Large: max files size is "+strconv.Itoa(maxFileSize))
-			}
-
-			err = deleteFile(path)
-			if err != nil {
-				log.Printf("deleteFile return %w in handleCallbackQuery", err)
-			}
-		}
-
+		tb.processPlaylistVideo(callbackQuery, playlist)
 	default:
-
-		var video *youtube.Video
-		for _, playlistEntry := range playlist.Videos {
-			if playlistEntry.ID == callbackQuery.Data {
-				video, err = downloader.Downloader.Client.VideoFromPlaylistEntry(playlistEntry)
-				break
-			}
-		}
-
-		path, err := tb.downloadVideo(video)
-		if err != nil {
-			log.Printf("downloadVideo in handleCallbackQueryWithPlaylist error: %w", err)
-		}
-
-		err = tb.sendFile(callbackQuery.Message, path)
-		if err != nil {
-			log.Printf("sendFile in handleCallbackQueryWithPlaylist error: %w", err)
-			tb.sendReplyMessage(callbackQuery.Message, "Request Entity Too Large")
-		}
-
-		// deletes file after sending
-		defer func() {
-			err := deleteFile(path)
-			if err != nil {
-				log.Printf("deleteFile return %w in handleCallbackQuery", err)
-			}
-		}()
-
+		tb.processSingleVideo(callbackQuery, playlist)
 	}
 }
-
-//func (tb *TgBot)
 
 // getKeyboard return InlineKeyboardMarkup by all possible video formats
 func getKeyboardVideoFormats(formats youtube.FormatList) (tgbotapi.InlineKeyboardMarkup, error) {
@@ -222,6 +149,7 @@ func getKeyboardVideoFormats(formats youtube.FormatList) (tgbotapi.InlineKeyboar
 	return keyboard, nil
 }
 
+// getKeyboardPlaylist return a keyboard with all videos from playlist
 func getKeyboardPlaylist(playlist *youtube.Playlist) tgbotapi.InlineKeyboardMarkup {
 	keyboard := tgbotapi.NewInlineKeyboardMarkup()
 
