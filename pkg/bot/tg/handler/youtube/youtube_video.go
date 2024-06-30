@@ -1,32 +1,25 @@
-package tg_bot
+package youtube
 
 import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"log"
-	youtube_downloader "youtube_downloader/pkg/downloader/youtube-downloader"
+	youtube_downloader "youtube_downloader/pkg/downloader/youtube"
 )
 
 // handleYoutubeVideo gets all possible formats of the video by a link
-// creates a keyboard and sends it to user's chat
-func (tb *TgBot) handleYoutubeVideo(message *tgbotapi.Message) error {
+// creates a keyboard and return it
+func (yh *YoutubeHandler) handleYoutubeVideo(message *tgbotapi.Message) (*tgbotapi.InlineKeyboardMarkup, error) {
 	videoURL := message.Text
 	formats, err := youtube_downloader.FormatWithAudioChannels(videoURL)
 	if err != nil {
 		log.Printf("FormatWithAudioChannels return %w", err)
-		return err
+		return nil, err
 	}
 
 	keyboard, err := getKeyboardVideoFormats(formats)
 	if err != nil {
 		log.Printf("GetKeyboard return %w", err)
-		return err
+		return nil, err
 	}
-
-	err = tb.sendKeyboardMessage(message, keyboard)
-	if err != nil {
-		log.Printf("sendKeyboardMessage %w", err)
-		return err
-	}
-
-	return nil
+	return &keyboard, nil
 }

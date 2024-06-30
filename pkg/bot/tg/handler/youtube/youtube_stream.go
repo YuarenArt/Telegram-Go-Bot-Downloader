@@ -1,4 +1,4 @@
-package tg_bot
+package youtube
 
 import (
 	"fmt"
@@ -6,38 +6,32 @@ import (
 	"log"
 	"net/url"
 	"strings"
-	youtube_downloader "youtube_downloader/pkg/downloader/youtube-downloader"
+	youtube_downloader "youtube_downloader/pkg/downloader/youtube"
 )
 
 // handleYoutubeStream transforms live/ link into common video link
-// download it and send
-func (tb *TgBot) handleYoutubeStream(message *tgbotapi.Message) error {
+// download it and return
+func (yh *YoutubeHandler) handleYoutubeStream(message *tgbotapi.Message) (*tgbotapi.InlineKeyboardMarkup, error) {
 
 	videoURLWithLivePrefix := message.Text
-	videoURL := formatYouTubeURLOnStream(videoURLWithLivePrefix)
+	videoURL := FormatYouTubeURLOnStream(videoURLWithLivePrefix)
 	formats, err := youtube_downloader.FormatWithAudioChannels(videoURL)
 	if err != nil {
 		log.Printf("FormatWithAudioChannels return %w", err)
-		return err
+		return nil, err
 	}
 
 	keyboard, err := getKeyboardVideoFormats(formats)
 	if err != nil {
 		log.Printf("GetKeyboard return %w", err)
-		return err
+		return nil, err
 	}
 
-	err = tb.sendKeyboardMessageWithFormattedLink(message, keyboard, videoURL)
-	if err != nil {
-		log.Printf("sendKeyboardMessage %w", err)
-		return err
-	}
-
-	return nil
+	return &keyboard, nil
 }
 
-// formatYouTubeURLonStream instead of live/ links return link on video
-func formatYouTubeURLOnStream(inputURL string) string {
+// FormatYouTubeURLonStream instead of live/ links return link on video
+func FormatYouTubeURLOnStream(inputURL string) string {
 	u, err := url.Parse(inputURL)
 	if err != nil {
 		return inputURL

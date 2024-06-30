@@ -1,5 +1,8 @@
 package downloader
 
+type VideoInfo interface {
+}
+
 type Downloader interface {
-	Download()
+	GetVideo(videoURL string) (VideoInfo, error)
 }

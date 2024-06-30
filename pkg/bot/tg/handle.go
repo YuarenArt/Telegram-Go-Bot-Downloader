@@ -1,0 +1,69 @@
+package tg
+
+import (
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"log"
+	"strings"
+	"youtube_downloader/pkg/bot/tg/handler"
+	"youtube_downloader/pkg/bot/tg/handler/youtube"
+	"youtube_downloader/pkg/bot/tg/send"
+)
+
+// TODO сделать многопоточную раюоту так чтобы после того видео загрузилось
+// и начло отправляться можно было скачивать и отправлять нвоое
+
+// handleUpdates gets updates from telegramAPI and handles it
+func (tb *TgBot) handleUpdates(updates tgbotapi.UpdatesChannel) {
+	for update := range updates {
+		if update.Message != nil {
+			if update.Message.IsCommand() {
+				tb.handleCommand(update.Message)
+				continue
+			}
+			tb.handleMessage(update.Message)
+		} else if update.CallbackQuery != nil {
+			tb.handleCallbackQuery(update.CallbackQuery)
+		}
+	}
+}
+
+// handleMessage processes an incoming message.
+// If the message contains a command, it handles the command.
+// If the message contains a link, it handles the link.
+// Otherwise, it handles default and help commands.
+func (tb *TgBot) handleMessage(message *tgbotapi.Message) {
+	log.Printf("[%s] %s", message.From.UserName, message.Text)
+
+	switch {
+	case isYoutubeLink(message.Text):
+		keyboard, err := tb.handlers[handler.YoutubeHandler].HandleMessage(message)
+		if err != nil {
+			log.Print(err)
+			errMsg := err.Error()
+			if errMsg == "Request Entity Too Large" {
+				send.SendReplyMessage(tb.Bot, message, "Your file too large")
+			} else if errMsg == "extractVideoID failed: invalid characters in video id" {
+				send.SendReplyMessage(tb.Bot, message, "Your link incorrect. Just send a link")
+			} else {
+				send.SendReplyMessage(tb.Bot, message, "Something went wrong")
+			}
+		}
+
+		if strings.HasPrefix(message.Text, "https://www.youtube.com/live/") {
+			videoURL := youtube.FormatYouTubeURLOnStream(message.Text)
+			send.SendKeyboardMessageWithFormattedLink(tb.Bot, message, keyboard, videoURL)
+		} else {
+			send.SendKeyboardMessage(tb.Bot, message, keyboard)
+		}
+
+	default:
+		tb.handleDefaultCommand(message)
+		tb.handleHelpCommand(message)
+	}
+}
+
+func isYoutubeLink(link string) bool {
+	return strings.HasPrefix(link, "https://www.youtube.com") ||
+		strings.HasPrefix(link, "https://youtube.com") ||
+		strings.HasPrefix(link, "https://youtu.be")
+}

@@ -1,12 +1,28 @@
-package youtube_downloader
+package youtube
 
 import (
-	"context"
 	"fmt"
 	"github.com/kkdai/youtube/v2"
 	"github.com/kkdai/youtube/v2/downloader"
 	"log"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
+)
+
+const (
+	DOWNLOAD_PREFIX = "download/"
+
+	VIDEO_PREFIX = "video/"
+	AUDIO_PREFIX = "audio/"
+
+	FORMAT_MP4 = ".mp4"
+	FORMAT_MP3 = ".mp3"
+
+	MaxFileSize = 2147483648.0 // in bites (2 Gb)
+
 )
 
 var SupportedPrefixesFormat = []string{
@@ -44,20 +60,6 @@ func (ytd *YouTubeDownloader) GetVideo(videoURL string) (*youtube.Video, error) 
 	}
 	log.Printf("Got video: %s", video.Title)
 	return video, err
-}
-
-// DownloadVideoWithFormat download a video according to a format
-func (ytd *YouTubeDownloader) DownloadVideoWithFormat(
-	ctx context.Context,
-	video *youtube.Video,
-	format *youtube.Format,
-	outputFile string) error {
-
-	if err := ytd.Downloader.Download(ctx, video, format, outputFile); err != nil {
-		fmt.Println(err)
-		return err
-	}
-	return nil
 }
 
 func (ytd *YouTubeDownloader) GetPlaylist(url string) (*youtube.Playlist, error) {
@@ -112,4 +114,65 @@ func contains(slice []string, item string) bool {
 		}
 	}
 	return false
+}
+
+// fileExists return true if file with filePath exists
+func fileExists(filePath string) bool {
+	_, err := os.Stat(filePath)
+	return !os.IsNotExist(err)
+}
+
+// delete all unacceptable symbols for Mac, Windows, Ubuntu file system
+func cleanVideoTitle(title string) string {
+	title = regexp.MustCompile(`[/\\:*?"<>|]`).ReplaceAllString(title, "")
+	title = regexp.MustCompile(`\s+`).ReplaceAllString(title, " ")
+
+	return title
+}
+
+// return a format of file (.mp4, .m4a, .weba) according to a mimeType
+func getFormatByMimeType(mimeType string) (string, error) {
+	switch {
+	case strings.HasPrefix(mimeType, "video/mp4"):
+		return ".mp4", nil
+	case strings.HasPrefix(mimeType, "audio/mp4"):
+		return ".m4a", nil
+	case strings.HasPrefix(mimeType, "audio/webm"):
+		return ".weba", nil
+	default:
+		return "", fmt.Errorf("unsupported mime type: %s", mimeType)
+	}
+}
+
+// change any file extension on .mp3
+func changeFileExtensionToMp3(filePath string) error {
+	fileName := strings.TrimSuffix(filepath.Base(filePath), filepath.Ext(filePath))
+	fileDir := filepath.Dir(filePath)
+	newFilePath := fileDir + "/" + fileName + ".mp3"
+	return os.Rename(filePath, newFilePath)
+}
+
+// isAcceptableFileSize return true if file size less than possible size to send to tg API
+func isAcceptableFileSize(format youtube.Format) bool {
+	fileSize, _ := getFileSize(format)
+	return fileSize < MaxFileSize
+}
+
+// getFileSize return a file size in bite of certain format
+func getFileSize(format youtube.Format) (float64, error) {
+
+	// get durations in secs
+	duration, err := strconv.ParseFloat(format.ApproxDurationMs, 64)
+	if err != nil {
+		return 0, err
+	}
+	duration /= 1000
+
+	// get bitrate in bite\sec
+	bitrate := format.Bitrate
+
+	// size in bite
+	contentLength := float64(bitrate/8) * duration
+
+	return contentLength, nil
 }

@@ -1,4 +1,4 @@
-package tg_bot
+package bot
 
 type Bot interface {
 	StartBot() error
