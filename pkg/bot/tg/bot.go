@@ -4,6 +4,8 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"log"
 	"youtube_downloader/pkg/bot/tg/handler"
+	_ "youtube_downloader/pkg/database-client"
+	database_client "youtube_downloader/pkg/database-client"
 )
 
 // TgBot uses telegram-Bot-api to maintain tg Bot
@@ -11,11 +13,15 @@ import (
 type TgBot struct {
 	Bot      *tgbotapi.BotAPI
 	handlers []handler.Handler
+	Client   *database_client.Client
 }
 
 // NewBot initializes a new TgBot instance with the given Telegram Bot API instance.
 func NewBot(bot *tgbotapi.BotAPI) *TgBot {
-	return &TgBot{Bot: bot}
+	return &TgBot{
+		Bot:    bot,
+		Client: database_client.NewClient(),
+	}
 }
 
 // StartBot starts the Bot by authorizing it and initiating the update handling process.

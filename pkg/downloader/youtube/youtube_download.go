@@ -15,7 +15,7 @@ func (ytd *YouTubeDownloader) DownloadVideoWithFormat(
 	outputFile string) error {
 
 	if err := ytd.Downloader.Download(ctx, video, format, outputFile); err != nil {
-		fmt.Println(err)
+		log.Printf("Error after Download : %s", err)
 		return err
 	}
 	return nil
@@ -24,12 +24,12 @@ func (ytd *YouTubeDownloader) DownloadVideoWithFormat(
 // DownloadVideo downloads video with the lowest quality
 func (ytd *YouTubeDownloader) DownloadVideo(video *youtube.Video) (pathAndName string, err error) {
 	title := cleanVideoTitle(video.Title)
-	pathAndName = DOWNLOAD_PREFIX + title + FORMAT_MP4
+	pathAndName = DOWNLOAD_DIR + title + FORMAT_MP4
 
 	formats := video.Formats.WithAudioChannels()
 	formats, err = WithFormats(&formats, VIDEO_PREFIX)
 	if err != nil {
-		log.Printf("failed to get %s formats: %w", VIDEO_PREFIX, err)
+		log.Printf("failed to get %s formats: %s", VIDEO_PREFIX, err)
 	}
 	formats.Sort()
 	format := formats[len(formats)-1]
@@ -49,7 +49,7 @@ func (ytd *YouTubeDownloader) DownloadAudio(video *youtube.Video) (pathAndName s
 	formats := video.Formats.WithAudioChannels()
 	formats, err = WithFormats(&formats, AUDIO_PREFIX)
 	if err != nil {
-		log.Printf("failed to get %s formats: %w", VIDEO_PREFIX, err)
+		log.Printf("failed to get %s formats: %s", VIDEO_PREFIX, err)
 	}
 	formats.Sort()
 	format := formats[0]
@@ -59,17 +59,7 @@ func (ytd *YouTubeDownloader) DownloadAudio(video *youtube.Video) (pathAndName s
 	}
 
 	fileFormat, err := getFormatByMimeType(format.MimeType)
-	pathAndName = DOWNLOAD_PREFIX + title + fileFormat
-
-	// changes any extension except .mp4 to .mp3
-	if fileFormat != ".mp4" {
-		if err = changeFileExtensionToMp3(DOWNLOAD_PREFIX + title + fileFormat); err != nil {
-			log.Println("can't rename file: " + err.Error())
-		} else {
-			fileFormat = ".mp3"
-			pathAndName = DOWNLOAD_PREFIX + title + fileFormat
-		}
-	}
+	pathAndName = DOWNLOAD_DIR + title + fileFormat
 
 	return pathAndName, nil
 }
@@ -93,7 +83,7 @@ func (ytd *YouTubeDownloader) DownloadWithFormat(videoURL string, format youtube
 		return "", err
 	}
 
-	pathAndName = DOWNLOAD_PREFIX + title + fileFormat
+	pathAndName = DOWNLOAD_DIR + title + fileFormat
 
 	if fileExists(pathAndName) {
 		log.Print("File already exists, skipping download")
@@ -102,16 +92,11 @@ func (ytd *YouTubeDownloader) DownloadWithFormat(videoURL string, format youtube
 
 	ctx := context.Background()
 	if err := ytd.DownloadVideoWithFormat(ctx, video, &format, ""); err != nil {
-		fmt.Println(err)
+		log.Println(err)
+		return pathAndName, err
 	}
 
-	// changes any extension except .mp4 to .mp3
-	if fileFormat != ".mp4" {
-		if err := changeFileExtensionToMp3(pathAndName); err != nil {
-			return "", fmt.Errorf("can't rename file: %v", err)
-		}
-		pathAndName = DOWNLOAD_PREFIX + title + ".mp3"
-	}
+	log.Printf("DownloadWithFormat return path: %s", pathAndName)
 
 	return pathAndName, nil
 }

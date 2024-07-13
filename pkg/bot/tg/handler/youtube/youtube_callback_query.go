@@ -28,7 +28,7 @@ func (yh *YoutubeHandler) HandleCallbackQuery(callbackQuery *tgbotapi.CallbackQu
 	}
 }
 
-// HandleCallbackQuery gets link on video by callbackQuery.Message.Text,
+// HandleCallbackQueryWithFormats gets link on video by callbackQuery.Message.Text,
 // gets ItagNo by callbackQuery.Data to find correct format,
 // gets possible formats by videoURL,
 // and finally gets the format selected by the user.
@@ -73,6 +73,7 @@ func (yh *YoutubeHandler) HandleCallbackQueryWithFormats(callbackQuery *tgbotapi
 
 	dl := youtube_downloader.NewYouTubeDownloader()
 	pathAndName, err := dl.DownloadWithFormat(videoURL, formatFile)
+
 	if err != nil {
 		log.Printf(err.Error())
 		send.SendEditMessage(bot, resp.Chat.ID, resp.MessageID, err.Error())
@@ -94,6 +95,7 @@ func (yh *YoutubeHandler) HandleCallbackQueryWithFormats(callbackQuery *tgbotapi
 
 	err = send.SendFile(bot, callbackQuery.Message, pathAndName)
 	if err != nil {
+		send.SendEditMessage(bot, resp.Chat.ID, resp.MessageID, "I can't send the file. Sorry, something went wrong. Please, try others format")
 		log.Printf("sendFile return %w in handleCallbackQuery", err)
 	}
 

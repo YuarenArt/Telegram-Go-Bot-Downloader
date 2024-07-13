@@ -25,7 +25,8 @@ func main() {
 		log.Fatal("TELEGRAM_BOT_TOKEN must be set")
 	}
 
-	botAPIURL := "http://localhost:8081/bot%s/%s"
+	botAPIURL := "http://telegram-bot-api:8081/bot%s/%s"
+	//botAPIURL := "http://localhost:8081/bot%s/%s"
 	bot, err := tgbotapi.NewBotAPIWithAPIEndpoint(botToken, botAPIURL)
 
 	//bot, err := tgbotapi.NewBotAPI(botToken)

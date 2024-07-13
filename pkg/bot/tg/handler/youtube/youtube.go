@@ -53,8 +53,15 @@ func getKeyboardVideoFormats(formats youtube.FormatList) (tgbotapi.InlineKeyboar
 	for _, format := range formats {
 
 		mimeType := format.MimeType
+
+		//ignore a .webm format
+		if strings.HasPrefix(mimeType, "audio/webm") {
+			continue
+		}
+
 		videoFormat := strings.Split(mimeType, ";")[0]
 		qualityLabel := format.QualityLabel
+
 		data := strconv.Itoa(format.ItagNo) // to download video in the correct format
 
 		size, err := getFileSize(format)
@@ -63,8 +70,14 @@ func getKeyboardVideoFormats(formats youtube.FormatList) (tgbotapi.InlineKeyboar
 			return keyboard, err
 		}
 
+		sign := []string{videoFormat}
+		if qualityLabel != "" {
+			sign = append(sign, qualityLabel)
+		}
+		sign = append(sign, strconv.FormatFloat(size, 'f', 2, 64))
+
 		button := tgbotapi.NewInlineKeyboardButtonData(
-			fmt.Sprintf("%s, %s, %s Mb", videoFormat, qualityLabel, strconv.FormatFloat(size, 'f', 2, 64)),
+			fmt.Sprintf("%s Mb", strings.Join(sign, ", ")),
 			data)
 		keyboard.InlineKeyboard = append(keyboard.InlineKeyboard, []tgbotapi.InlineKeyboardButton{button})
 	}

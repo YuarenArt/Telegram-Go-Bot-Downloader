@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	DOWNLOAD_PREFIX = "download/"
+	DOWNLOAD_DIR = "download/"
 
 	VIDEO_PREFIX = "video/"
 	AUDIO_PREFIX = "audio/"
@@ -43,7 +43,7 @@ func NewYouTubeDownloader() *YouTubeDownloader {
 	return &YouTubeDownloader{
 		Downloader: downloader.Downloader{
 			Client:    youtube.Client{},
-			OutputDir: "download/",
+			OutputDir: DOWNLOAD_DIR,
 		},
 	}
 }
@@ -145,11 +145,24 @@ func getFormatByMimeType(mimeType string) (string, error) {
 }
 
 // change any file extension on .mp3
-func changeFileExtensionToMp3(filePath string) error {
+func ChangeFileExtension(filePath, extension string) error {
+	// Check if the file exists
+	if _, err := os.Stat(filePath); err != nil {
+		if !fileExists(filePath) {
+			return fmt.Errorf("file %s does not exist", filePath)
+		}
+		return err
+	}
+
 	fileName := strings.TrimSuffix(filepath.Base(filePath), filepath.Ext(filePath))
 	fileDir := filepath.Dir(filePath)
-	newFilePath := fileDir + "/" + fileName + ".mp3"
-	return os.Rename(filePath, newFilePath)
+	newFilePath := filepath.Join(fileDir, fileName+extension)
+
+	if err := os.Rename(filePath, newFilePath); err != nil {
+		return fmt.Errorf("error renaming file: %s", err)
+	}
+
+	return nil
 }
 
 // isAcceptableFileSize return true if file size less than possible size to send to tg API

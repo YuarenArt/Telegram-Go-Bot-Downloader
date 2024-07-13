@@ -1,12 +1,15 @@
 package tg
 
 import (
+	"context"
+	"fmt"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"log"
 	"strings"
 	"youtube_downloader/pkg/bot/tg/handler"
 	"youtube_downloader/pkg/bot/tg/handler/youtube"
 	"youtube_downloader/pkg/bot/tg/send"
+	database_client "youtube_downloader/pkg/database-client"
 )
 
 // TODO сделать многопоточную раюоту так чтобы после того видео загрузилось
@@ -14,7 +17,13 @@ import (
 
 // handleUpdates gets updates from telegramAPI and handles it
 func (tb *TgBot) handleUpdates(updates tgbotapi.UpdatesChannel) {
+
 	for update := range updates {
+		ctx := context.Background()
+		tb.ensureUserExists(ctx, update.Message.From.UserName)
+
+		// create new user in db if not exist
+
 		if update.Message != nil {
 			if update.Message.IsCommand() {
 				tb.handleCommand(update.Message)
@@ -60,6 +69,21 @@ func (tb *TgBot) handleMessage(message *tgbotapi.Message) {
 		tb.handleDefaultCommand(message)
 		tb.handleHelpCommand(message)
 	}
+}
+
+// createUserIfNotExists checks if a user exists in the database and creates it if not.
+func (tb *TgBot) ensureUserExists(ctx context.Context, username string) error {
+	exist, err := tb.Client.IsUserExist(ctx, username)
+	if err != nil {
+		return fmt.Errorf("error checking if user exists: %w", err)
+	}
+	if !exist {
+		newUser := database_client.NewUser(username)
+		if err := tb.Client.CreateUser(ctx, newUser); err != nil {
+			return fmt.Errorf("error creating new user: %w", err)
+		}
+	}
+	return nil
 }
 
 func isYoutubeLink(link string) bool {
