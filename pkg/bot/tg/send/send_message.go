@@ -32,8 +32,8 @@ func SendEditMessage(bot *tgbotapi.BotAPI, chatID int64, messageID int, text str
 	return err
 }
 
-// SendKeyboardMessage sends user a keyboard
-func SendKeyboardMessage(bot *tgbotapi.BotAPI, message *tgbotapi.Message, keyboard *tgbotapi.InlineKeyboardMarkup) error {
+// SendKeyboardMessageReply sends user a keyboard in reply
+func SendKeyboardMessageReply(bot *tgbotapi.BotAPI, message *tgbotapi.Message, keyboard *tgbotapi.InlineKeyboardMarkup) error {
 	msg := tgbotapi.NewMessage(message.Chat.ID,
 		fmt.Sprintf("Your link:\n"+
 			"%s"+
@@ -44,7 +44,17 @@ func SendKeyboardMessage(bot *tgbotapi.BotAPI, message *tgbotapi.Message, keyboa
 	return err
 }
 
-func SendKeyboardMessageWithFormattedLink(bot *tgbotapi.BotAPI, message *tgbotapi.Message, keyboard *tgbotapi.InlineKeyboardMarkup, videoURL string) error {
+// SendKeyboardMessage sends user a keyboard
+func SendKeyboardMessage(bot *tgbotapi.BotAPI, message *tgbotapi.Message, keyboard *tgbotapi.InlineKeyboardMarkup) error {
+	msg := tgbotapi.NewMessage(message.Chat.ID,
+		fmt.Sprintf("Choose a format for video:"),
+	)
+	msg.ReplyMarkup = keyboard
+	_, err := bot.Send(msg)
+	return err
+}
+
+func SendKeyboardMessageReplyWithFormattedLink(bot *tgbotapi.BotAPI, message *tgbotapi.Message, keyboard *tgbotapi.InlineKeyboardMarkup, videoURL string) error {
 	msg := tgbotapi.NewMessage(message.Chat.ID,
 		fmt.Sprintf("Your link:\n"+
 			"%s"+

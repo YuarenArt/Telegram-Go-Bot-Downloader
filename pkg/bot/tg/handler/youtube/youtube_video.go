@@ -12,14 +12,14 @@ func (yh *YoutubeHandler) handleYoutubeVideo(message *tgbotapi.Message) (*tgbota
 	videoURL := message.Text
 	formats, err := youtube_downloader.FormatWithAudioChannels(videoURL)
 	if err != nil {
-		log.Printf("FormatWithAudioChannels return %w", err)
+		log.Printf("FormatWithAudioChannels return %s", err)
 		return nil, err
 	}
 
-	keyboard, err := getKeyboardVideoFormats(formats)
+	keyboard, err := getKeyboardVideoFormats(formats, videoURL)
 	if err != nil {
-		log.Printf("GetKeyboard return %w", err)
+		log.Printf("GetKeyboard return %s", err)
 		return nil, err
 	}
-	return &keyboard, nil
+	return keyboard, nil
 }

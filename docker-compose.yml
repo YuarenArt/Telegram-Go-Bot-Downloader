@@ -1,0 +1,36 @@
+version: '3.7'
+
+services:
+  telegram-bot-api:
+    image: aiogram/telegram-bot-api:latest
+    container_name: telegram-bot-api-local
+    environment:
+      TELEGRAM_API_ID: "23608845"
+      TELEGRAM_API_HASH: "cc16b480d848a43a44e73aa24c41f254"
+    volumes:
+      - telegram-bot-api-data:/var/lib/telegram-bot-api
+    ports:
+      - "8081:8081"
+
+  tg-database:
+    image: tg-users-database:latest
+    container_name: tg-database
+    ports:
+      - "8082:8082"
+
+  telegram-bot:
+    image: telegram-bot:latest
+    container_name: telegram-bot
+    environment:
+      - DOWNLOAD_PATH=/download
+    volumes:
+      - .:/usr/src/telegram-bot
+    depends_on:
+      - telegram-bot-api
+      - tg-database
+    ports:
+      - "8080:8080"
+
+
+volumes:
+  telegram-bot-api-data:

@@ -46,8 +46,8 @@ func (yh *YoutubeHandler) handleYoutubeLink(message *tgbotapi.Message) (*tgbotap
 	}
 }
 
-// getKeyboard return InlineKeyboardMarkup by all possible video formats
-func getKeyboardVideoFormats(formats youtube.FormatList) (tgbotapi.InlineKeyboardMarkup, error) {
+// getKeyboard return InlineKeyboardMarkup by all possible video formats. Button's data include video's url and ItagNo
+func getKeyboardVideoFormats(formats youtube.FormatList, url string) (*tgbotapi.InlineKeyboardMarkup, error) {
 	keyboard := tgbotapi.NewInlineKeyboardMarkup()
 
 	for _, format := range formats {
@@ -62,12 +62,12 @@ func getKeyboardVideoFormats(formats youtube.FormatList) (tgbotapi.InlineKeyboar
 		videoFormat := strings.Split(mimeType, ";")[0]
 		qualityLabel := format.QualityLabel
 
-		data := strconv.Itoa(format.ItagNo) // to download video in the correct format
+		data := fmt.Sprintf("%s,%s", url, strconv.Itoa(format.ItagNo))
 
 		size, err := getFileSize(format)
 		size = size / (1024 * 1024)
 		if err != nil {
-			return keyboard, err
+			return &keyboard, err
 		}
 
 		sign := []string{videoFormat}
@@ -82,7 +82,7 @@ func getKeyboardVideoFormats(formats youtube.FormatList) (tgbotapi.InlineKeyboar
 		keyboard.InlineKeyboard = append(keyboard.InlineKeyboard, []tgbotapi.InlineKeyboardButton{button})
 	}
 
-	return keyboard, nil
+	return &keyboard, nil
 }
 
 // getFileSize return a file size in bite of certain format

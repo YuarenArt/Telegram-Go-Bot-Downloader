@@ -12,27 +12,29 @@ import (
 	database_client "youtube_downloader/pkg/database-client"
 )
 
-// TODO сделать многопоточную раюоту так чтобы после того видео загрузилось
-// и начло отправляться можно было скачивать и отправлять нвоое
-
 // handleUpdates gets updates from telegramAPI and handles it
 func (tb *TgBot) handleUpdates(updates tgbotapi.UpdatesChannel) {
 
 	for update := range updates {
 		ctx := context.Background()
-		tb.ensureUserExists(ctx, update.Message.From.UserName)
+		if err := tb.ensureUserExists(ctx, update.Message); err != nil {
+			log.Println(err)
+		}
 
-		// create new user in db if not exist
-
-		if update.Message != nil {
+		switch {
+		case update.Message != nil:
 			if update.Message.IsCommand() {
 				tb.handleCommand(update.Message)
 				continue
 			}
 			tb.handleMessage(update.Message)
-		} else if update.CallbackQuery != nil {
+		case update.CallbackQuery != nil:
 			tb.handleCallbackQuery(update.CallbackQuery)
+		default:
+			log.Println("unknown case")
+			tb.handleDefaultCommand(update.Message)
 		}
+
 	}
 }
 
@@ -60,9 +62,9 @@ func (tb *TgBot) handleMessage(message *tgbotapi.Message) {
 
 		if strings.HasPrefix(message.Text, "https://www.youtube.com/live/") {
 			videoURL := youtube.FormatYouTubeURLOnStream(message.Text)
-			send.SendKeyboardMessageWithFormattedLink(tb.Bot, message, keyboard, videoURL)
+			send.SendKeyboardMessageReplyWithFormattedLink(tb.Bot, message, keyboard, videoURL)
 		} else {
-			send.SendKeyboardMessage(tb.Bot, message, keyboard)
+			send.SendKeyboardMessageReply(tb.Bot, message, keyboard)
 		}
 
 	default:
@@ -72,7 +74,15 @@ func (tb *TgBot) handleMessage(message *tgbotapi.Message) {
 }
 
 // createUserIfNotExists checks if a user exists in the database and creates it if not.
-func (tb *TgBot) ensureUserExists(ctx context.Context, username string) error {
+func (tb *TgBot) ensureUserExists(ctx context.Context, message *tgbotapi.Message) error {
+
+	if message == nil {
+		log.Println("empty message while ensureUserExists")
+		return nil
+	}
+
+	username := message.From.UserName
+
 	exist, err := tb.Client.IsUserExist(ctx, username)
 	if err != nil {
 		return fmt.Errorf("error checking if user exists: %w", err)
@@ -87,6 +97,7 @@ func (tb *TgBot) ensureUserExists(ctx context.Context, username string) error {
 }
 
 func isYoutubeLink(link string) bool {
+	link = strings.TrimSpace(link)
 	return strings.HasPrefix(link, "https://www.youtube.com") ||
 		strings.HasPrefix(link, "https://youtube.com") ||
 		strings.HasPrefix(link, "https://youtu.be")

@@ -10,24 +10,24 @@ import (
 )
 
 // handleYoutubeStream transforms live/ link into common video link
-// download it and return
+// creates a keyboard and return it
 func (yh *YoutubeHandler) handleYoutubeStream(message *tgbotapi.Message) (*tgbotapi.InlineKeyboardMarkup, error) {
 
 	videoURLWithLivePrefix := message.Text
 	videoURL := FormatYouTubeURLOnStream(videoURLWithLivePrefix)
 	formats, err := youtube_downloader.FormatWithAudioChannels(videoURL)
 	if err != nil {
-		log.Printf("FormatWithAudioChannels return %w", err)
+		log.Printf("FormatWithAudioChannels return %s", err)
 		return nil, err
 	}
 
-	keyboard, err := getKeyboardVideoFormats(formats)
+	keyboard, err := getKeyboardVideoFormats(formats, videoURL)
 	if err != nil {
-		log.Printf("GetKeyboard return %w", err)
+		log.Printf("GetKeyboard return %s", err)
 		return nil, err
 	}
 
-	return &keyboard, nil
+	return keyboard, nil
 }
 
 // FormatYouTubeURLonStream instead of live/ links return link on video

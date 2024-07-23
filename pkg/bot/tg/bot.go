@@ -3,6 +3,8 @@ package tg
 import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"log"
+	"os"
+	"path/filepath"
 	"youtube_downloader/pkg/bot/tg/handler"
 	_ "youtube_downloader/pkg/database-client"
 	database_client "youtube_downloader/pkg/database-client"
@@ -27,6 +29,10 @@ func NewBot(bot *tgbotapi.BotAPI) *TgBot {
 // StartBot starts the Bot by authorizing it and initiating the update handling process.
 func (tb *TgBot) StartBot() error {
 	log.Printf("Authorized on account %s", tb.Bot.Self.UserName)
+	if err := clearDownloadDir(); err != nil {
+		log.Println(err.Error())
+		return err
+	}
 
 	tb.initSupportedHandlers()
 
@@ -57,4 +63,28 @@ func (tb *TgBot) initUpdatesChannel() tgbotapi.UpdatesChannel {
 	update.Timeout = 60
 
 	return tb.Bot.GetUpdatesChan(update)
+}
+
+func clearDownloadDir() error {
+	dir := "download"
+	d, err := os.Open(dir)
+	if err != nil {
+		return err
+	}
+	defer d.Close()
+
+	names, err := d.Readdirnames(0)
+	if err != nil {
+		return err
+	}
+
+	for _, name := range names {
+		err = os.RemoveAll(filepath.Join(dir, name))
+		if err != nil {
+			return err
+		}
+	}
+
+	log.Println("Download dir is cleaned")
+	return nil
 }

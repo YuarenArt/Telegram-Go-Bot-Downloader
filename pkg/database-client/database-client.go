@@ -11,7 +11,7 @@ import (
 
 const (
 	timeout = 15 * time.Second
-	baseURL = "http://telegram-bot-api:8082"
+	baseURL = "http://tg-database:8082"
 )
 
 // Client is a structure that contains the HTTP client and the base URL of the server.
@@ -89,7 +89,6 @@ func (c *Client) GetUser(ctx context.Context, username string) (*User, error) {
 		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
 
-	// Decode the response body into a user struct
 	var retrievedUser User
 	if err := json.NewDecoder(resp.Body).Decode(&retrievedUser); err != nil {
 		return nil, fmt.Errorf("failed to decode response body: %w", err)
