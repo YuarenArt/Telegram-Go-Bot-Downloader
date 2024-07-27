@@ -4,6 +4,7 @@ import (
 	"fmt"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/kkdai/youtube/v2"
+	"log"
 	"strconv"
 	"strings"
 	youtube_downloader "youtube_downloader/pkg/downloader/youtube"
@@ -50,12 +51,21 @@ func (yh *YoutubeHandler) handleYoutubeLink(message *tgbotapi.Message) (*tgbotap
 func getKeyboardVideoFormats(formats youtube.FormatList, url string) (*tgbotapi.InlineKeyboardMarkup, error) {
 	keyboard := tgbotapi.NewInlineKeyboardMarkup()
 
+	// Gets size of audio with maximum quality for downloading video. Adds size for button
+	audioFormats := formats.WithAudioChannels()
+	audioFormats.Sort()
+	audioSize, err := getFileSize(audioFormats[0])
+	if err != nil {
+		log.Println("getFileSize to get audioSize in getKeyboardVideoFormats return: " + err.Error())
+	}
+	audioSize = audioSize / (1024 * 1024) // Mb
+
 	for _, format := range formats {
 
 		mimeType := format.MimeType
 
 		//ignore a .webm format
-		if strings.HasPrefix(mimeType, "audio/webm") {
+		if strings.HasPrefix(mimeType, "audio/webm") || strings.HasPrefix(mimeType, "video/webm") {
 			continue
 		}
 
@@ -66,6 +76,10 @@ func getKeyboardVideoFormats(formats youtube.FormatList, url string) (*tgbotapi.
 
 		size, err := getFileSize(format)
 		size = size / (1024 * 1024)
+		// if downloads video adds additional size for separate audio file
+		if strings.HasPrefix(mimeType, "video") {
+			size += audioSize
+		}
 		if err != nil {
 			return &keyboard, err
 		}
@@ -85,20 +99,24 @@ func getKeyboardVideoFormats(formats youtube.FormatList, url string) (*tgbotapi.
 	return &keyboard, nil
 }
 
+// TODO do correct file's size determining
 // getFileSize return a file size in bite of certain format
 func getFileSize(format youtube.Format) (float64, error) {
+	if format.ContentLength > 0 {
+		return float64(format.ContentLength), nil
+	}
 
-	// get durations in secs
 	duration, err := strconv.ParseFloat(format.ApproxDurationMs, 64)
 	if err != nil {
 		return 0, err
 	}
 	duration /= 1000
 
-	// get bitrate in bite\sec
 	bitrate := format.Bitrate
+	if format.AverageBitrate > 0 {
+		bitrate = format.AverageBitrate
+	}
 
-	// size in bite
 	contentLength := float64(bitrate/8) * duration
 
 	return contentLength, nil

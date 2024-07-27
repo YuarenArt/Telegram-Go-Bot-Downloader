@@ -1,6 +1,7 @@
 package youtube
 
 import (
+	"context"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/kkdai/youtube/v2"
 	"log"
@@ -42,7 +43,7 @@ func (yh *YoutubeHandler) HandleCallbackQueryWithFormats(callbackQuery *tgbotapi
 	dataParts := strings.Split(data, ",")
 	videoURL := dataParts[0]
 
-	formats, err := youtube_downloader.FormatWithAudioChannels(videoURL)
+	formats, err := youtube_downloader.FormatWithAudioChannelsComposite(videoURL)
 	if err != nil {
 		log.Printf("FormatWithAudioChannels return %s in handleCallbackQuery", err)
 	}
@@ -69,8 +70,13 @@ func (yh *YoutubeHandler) HandleCallbackQueryWithFormats(callbackQuery *tgbotapi
 	}
 
 	dl := youtube_downloader.NewYouTubeDownloader()
-	pathAndName, err := dl.DownloadWithFormat(videoURL, formatFile)
-
+	var pathAndName string
+	if strings.HasPrefix(formatFile.MimeType, "audio") {
+		pathAndName, err = dl.DownloadWithFormat(videoURL, formatFile)
+	} else {
+		video, _ := dl.GetVideo(videoURL)
+		pathAndName, err = dl.DownloadVideoWithFormatComposite(context.Background(), "", video, formatFile.QualityLabel, "", "")
+	}
 	if err != nil {
 		log.Printf(err.Error())
 		send.SendEditMessage(bot, resp.Chat.ID, resp.MessageID, "Error! Try others formats, sorry (")

@@ -18,7 +18,6 @@ func SendFile(bot *tgbotapi.BotAPI, message *tgbotapi.Message, filePath string) 
 	case ".mp4":
 		return sendVideo(bot, message.Chat.ID, message.MessageID, filePath)
 	case ".weba", ".mp3", ".m4a":
-		log.Printf("Start sending audio with extension: %s", filepath.Ext(filePath))
 		return sendAudio(bot, message.Chat.ID, message.MessageID, filePath)
 	default:
 		return errors.New("unknown extension")

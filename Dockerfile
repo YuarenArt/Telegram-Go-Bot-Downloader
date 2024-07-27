@@ -5,7 +5,7 @@ ARG ALPINE_VERSION=latest
 
 FROM golang:${GO_VERSION}-alpine as builder
 
-RUN apk add --no-cache git
+RUN apk add --no-cache git ffmpeg
 
 WORKDIR /usr/src/telegram-bot
 

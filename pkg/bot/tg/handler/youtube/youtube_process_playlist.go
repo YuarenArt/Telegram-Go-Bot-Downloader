@@ -102,11 +102,17 @@ func (yh *YoutubeHandler) processSingleVideo(bot *tgbotapi.BotAPI, callbackQuery
 	}
 
 	videoURL := fmt.Sprintf("https://www.youtube.com/watch?v=%s", video.ID)
-	formats := video.Formats.WithAudioChannels()
-
+	video, err := downloader.GetVideo(videoURL)
+	if err != nil {
+		log.Println("can't get video in processSingleVideo: " + err.Error())
+	}
+	formats := video.Formats
 	keyboard, err := getKeyboardVideoFormats(formats, videoURL)
 	if err != nil {
 		log.Println("Error after getKeyboardVideoFormats in processSingleVideo: " + err.Error())
+		send.SendReplyMessage(bot, callbackQuery.Message, "Something went wrong. Sorry!")
+		return
 	}
+
 	send.SendKeyboardMessage(bot, callbackQuery.Message, keyboard)
 }

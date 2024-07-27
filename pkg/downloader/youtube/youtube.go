@@ -1,6 +1,7 @@
 package youtube
 
 import (
+	"errors"
 	"fmt"
 	"github.com/kkdai/youtube/v2"
 	"github.com/kkdai/youtube/v2/downloader"
@@ -101,9 +102,29 @@ func FormatWithAudioChannels(videoURL string) (youtube.FormatList, error) {
 	return formats, nil
 }
 
-func FormatWithAudioChannelsByVideo(video *youtube.Video) (youtube.FormatList, error) {
-	formats := video.Formats.WithAudioChannels()
+func FormatWithAudioChannelsComposite(videoURL string) (youtube.FormatList, error) {
+	client := youtube.Client{}
+	video, err := client.GetVideo(videoURL)
+	if err != nil {
+		log.Print(err)
+		return nil, err
+	}
+
+	var formats youtube.FormatList
+	uniqueFormats := make(map[int]bool)
+	for _, format := range video.Formats {
+		if _, exists := uniqueFormats[format.ItagNo]; !exists {
+			formats = append(formats, format)
+			uniqueFormats[format.ItagNo] = true
+		}
+	}
+
 	return formats, nil
+}
+
+func FormatWithAudioChannelsByVideo(video *youtube.Video) youtube.FormatList {
+	formats := video.Formats.WithAudioChannels()
+	return formats
 }
 
 // contains return true if item in slice
@@ -132,16 +153,11 @@ func cleanVideoTitle(title string) string {
 
 // return a format of file (.mp4, .m4a, .weba) according to a mimeType
 func getFormatByMimeType(mimeType string) (string, error) {
-	switch {
-	case strings.HasPrefix(mimeType, "video/mp4"):
-		return ".mp4", nil
-	case strings.HasPrefix(mimeType, "audio/mp4"):
-		return ".m4a", nil
-	case strings.HasPrefix(mimeType, "audio/webm"):
-		return ".weba", nil
-	default:
-		return "", fmt.Errorf("unsupported mime type: %s", mimeType)
+	format := canonicals[mimeType]
+	if format == "" {
+		return "", errors.New("unknown format")
 	}
+	return format, nil
 }
 
 // change any file extension on .mp3

@@ -10,7 +10,7 @@ import (
 // creates a keyboard and return it
 func (yh *YoutubeHandler) handleYoutubeVideo(message *tgbotapi.Message) (*tgbotapi.InlineKeyboardMarkup, error) {
 	videoURL := message.Text
-	formats, err := youtube_downloader.FormatWithAudioChannels(videoURL)
+	formats, err := youtube_downloader.FormatWithAudioChannelsComposite(videoURL)
 	if err != nil {
 		log.Printf("FormatWithAudioChannels return %s", err)
 		return nil, err

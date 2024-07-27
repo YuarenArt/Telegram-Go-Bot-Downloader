@@ -29,9 +29,12 @@ func NewBot(bot *tgbotapi.BotAPI) *TgBot {
 // StartBot starts the Bot by authorizing it and initiating the update handling process.
 func (tb *TgBot) StartBot() error {
 	log.Printf("Authorized on account %s", tb.Bot.Self.UserName)
-	if err := clearDownloadDir(); err != nil {
+	dir, err := os.Getwd()
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := clearDownloadDirs(dir); err != nil {
 		log.Println(err.Error())
-		return err
 	}
 
 	tb.initSupportedHandlers()
@@ -86,5 +89,31 @@ func clearDownloadDir() error {
 	}
 
 	log.Println("Download dir is cleaned")
+	return nil
+}
+
+func clearDownloadDirs(rootDir string) error {
+	err := filepath.Walk(rootDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() && info.Name() == "download" {
+			files, err := os.ReadDir(path)
+			if err != nil {
+				return err
+			}
+			for _, file := range files {
+				err = os.RemoveAll(filepath.Join(path, file.Name()))
+				if err != nil {
+					return err
+				}
+			}
+			log.Printf("Download dir %s is cleaned\n", path)
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
 	return nil
 }
