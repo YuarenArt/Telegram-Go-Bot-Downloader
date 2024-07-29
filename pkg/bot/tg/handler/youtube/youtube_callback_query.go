@@ -14,6 +14,8 @@ import (
 
 // TODO rework a way to get data for downloading
 
+// TODO add parallel sending files after downloading
+
 // HandleCallbackQuery gets url from Bot's message with a replying link,
 // then handle a link by its type: video (stream), playlist
 func (yh *YoutubeHandler) HandleCallbackQuery(callbackQuery *tgbotapi.CallbackQuery, bot *tgbotapi.BotAPI) {
@@ -83,24 +85,7 @@ func (yh *YoutubeHandler) HandleCallbackQueryWithFormats(callbackQuery *tgbotapi
 		return
 	}
 	// start sending
-	err = send.SendEditMessage(bot, resp.Chat.ID, resp.MessageID, send.SendingNotification)
-	if err != nil {
-		log.Printf("can't send edit message: %s", err.Error())
-	}
-
-	// deletes file after sending
-	defer func() {
-		err := deleteFile(pathAndName)
-		if err != nil {
-			log.Printf("deleteFile return %s in handleCallbackQuery", err)
-		}
-	}()
-
-	err = send.SendFile(bot, callbackQuery.Message, pathAndName)
-	if err != nil {
-		send.SendEditMessage(bot, resp.Chat.ID, resp.MessageID, "I can't send the file. Sorry, something went wrong. Please, try others format")
-		log.Printf("sendFile return %s in handleCallbackQuery", err)
-	}
+	go sendAnswer(bot, callbackQuery, &resp, &pathAndName)
 
 }
 
@@ -140,6 +125,27 @@ func (yh *YoutubeHandler) HandleCallbackQueryWithPlaylist(callbackQuery *tgbotap
 
 func deleteFile(pathToFile string) error {
 	return os.Remove(pathToFile)
+}
+
+func sendAnswer(bot *tgbotapi.BotAPI, callbackQuery *tgbotapi.CallbackQuery, resp *tgbotapi.Message, path *string) {
+	err := send.SendEditMessage(bot, resp.Chat.ID, resp.MessageID, send.SendingNotification)
+	if err != nil {
+		log.Printf("can't send edit message: %s", err.Error())
+	}
+
+	// deletes file after sending
+	defer func() {
+		err = deleteFile(*path)
+		if err != nil {
+			log.Printf("deleteFile return %s in handleCallbackQuery", err)
+		}
+	}()
+
+	err = send.SendFile(bot, callbackQuery.Message, *path)
+	if err != nil {
+		send.SendEditMessage(bot, resp.Chat.ID, resp.MessageID, "I can't send the file. Sorry, something went wrong. Please, try others format")
+		log.Printf("sendFile return %s in handleCallbackQuery", err)
+	}
 }
 
 func extractPlaylistURL(text string) string {

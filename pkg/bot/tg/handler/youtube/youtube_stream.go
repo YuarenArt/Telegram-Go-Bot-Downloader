@@ -30,7 +30,7 @@ func (yh *YoutubeHandler) handleYoutubeStream(message *tgbotapi.Message) (*tgbot
 	return keyboard, nil
 }
 
-// FormatYouTubeURLonStream instead of live/ links return link on video
+// FormatYouTubeURLOnStream instead of live/ links return link on video
 func FormatYouTubeURLOnStream(inputURL string) string {
 	u, err := url.Parse(inputURL)
 	if err != nil {

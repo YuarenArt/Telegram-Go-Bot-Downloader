@@ -153,7 +153,8 @@ func cleanVideoTitle(title string) string {
 
 // return a format of file (.mp4, .m4a, .weba) according to a mimeType
 func getFormatByMimeType(mimeType string) (string, error) {
-	format := canonicals[mimeType]
+	mimeTypeParts := strings.Split(mimeType, ";")
+	format := canonicals[mimeTypeParts[0]]
 	if format == "" {
 		return "", errors.New("unknown format")
 	}

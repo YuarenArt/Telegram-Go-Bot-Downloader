@@ -5,7 +5,6 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/kkdai/youtube/v2"
 	"log"
-	"strconv"
 	"strings"
 	"youtube_downloader/pkg/bot/tg/send"
 	youtube_downloader "youtube_downloader/pkg/downloader/youtube"
@@ -33,19 +32,7 @@ func (yh *YoutubeHandler) processPlaylistAudio(bot *tgbotapi.BotAPI, callbackQue
 		}
 
 		// start sending
-		err = send.SendEditMessage(bot, resp.Chat.ID, resp.MessageID, send.SendingNotification)
-		if err != nil {
-			log.Printf("can't send edit message: %s", err.Error())
-		}
-
-		if err := send.SendFile(bot, callbackQuery.Message, path); err != nil {
-			log.Printf("sendFile error: %v", err)
-			send.SendReplyMessage(bot, callbackQuery.Message, "File Too Large: max files size is "+strconv.Itoa(youtube_downloader.MaxFileSize/(1024*1024))+" Mb")
-		}
-
-		if err := deleteFile(path); err != nil {
-			log.Printf("deleteFile error: %v", err)
-		}
+		go sendAnswer(bot, callbackQuery, &resp, &path)
 	}
 }
 
@@ -71,19 +58,7 @@ func (yh *YoutubeHandler) processPlaylistVideo(bot *tgbotapi.BotAPI, callbackQue
 		}
 
 		// start sending
-		err = send.SendEditMessage(bot, resp.Chat.ID, resp.MessageID, send.SendingNotification)
-		if err != nil {
-			log.Printf("can't send edit message: %s", err.Error())
-		}
-
-		if err := send.SendFile(bot, callbackQuery.Message, path); err != nil {
-			log.Printf("sendFile error: %v", err)
-			send.SendReplyMessage(bot, callbackQuery.Message, "File Too Large: max files size is "+strconv.Itoa(youtube_downloader.MaxFileSize))
-		}
-
-		if err := deleteFile(path); err != nil {
-			log.Printf("deleteFile error: %v", err)
-		}
+		go sendAnswer(bot, callbackQuery, &resp, &path)
 	}
 }
 

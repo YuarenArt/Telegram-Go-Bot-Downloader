@@ -5,8 +5,10 @@ import (
 	"github.com/spf13/viper"
 	"log"
 	"os"
+	"os/signal"
 	"runtime"
 	"runtime/pprof"
+	"syscall"
 	"youtube_downloader/pkg/bot/tg"
 )
 
@@ -20,36 +22,68 @@ func initConfig() {
 	}
 }
 
-func main() {
-	// start prof
-	cpuFile, err := os.Create("cpu.prof")
+// startProfiling initializes CPU and memory profiling and sets up signal handling for graceful shutdown.
+func startProfiling(cpuProfile, memProfile string) (cleanup func(), err error) {
+	// Start CPU profiling
+	cpuFile, err := os.Create(cpuProfile)
 	if err != nil {
-		log.Fatal("could not create CPU profile: ", err)
+		return nil, err
 	}
-	defer cpuFile.Close()
-
 	if err := pprof.StartCPUProfile(cpuFile); err != nil {
-		log.Fatal("could not start CPU profile: ", err)
+		cpuFile.Close()
+		return nil, err
 	}
-	defer pprof.StopCPUProfile()
 
-	memFile, err := os.Create("mem.prof")
+	// Start memory profiling
+	memFile, err := os.Create(memProfile)
 	if err != nil {
-		log.Fatal("could not create memory profile: ", err)
+		cpuFile.Close()
+		pprof.StopCPUProfile()
+		return nil, err
 	}
-	defer memFile.Close()
 
-	defer func() {
-		runtime.GC() // Принудительный запуск сборщика мусора для получения актуальных данных
+	// Handle system signals for graceful shutdown
+	sigs := make(chan os.Signal, 1)
+	done := make(chan bool, 1)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+
+	go func() {
+		sig := <-sigs
+		log.Println(sig)
+		pprof.StopCPUProfile()
+		cpuFile.Close()
+		runtime.GC() // Forcing garbage collection to get accurate memory profile
 		if err := pprof.WriteHeapProfile(memFile); err != nil {
 			log.Fatal("could not write memory profile: ", err)
 		}
+		memFile.Close()
+		done <- true
 	}()
 
-	// end prof
+	// Cleanup function to stop profiling and close files
+	cleanup = func() {
+		pprof.StopCPUProfile()
+		cpuFile.Close()
+		runtime.GC()
+		if err := pprof.WriteHeapProfile(memFile); err != nil {
+			log.Fatal("could not write memory profile: ", err)
+		}
+		memFile.Close()
+		done <- true
+	}
+
+	return cleanup, nil
+}
+
+func main() {
+
+	cleanup, err := startProfiling("cpu.prof", "mem.prof")
+	if err != nil {
+		log.Fatal("Error starting profiling: ", err)
+	}
+	defer cleanup()
 
 	initConfig()
-
 	botToken := viper.GetString("TELEGRAM_BOT_TOKEN")
 	if botToken == "" {
 		log.Fatal("TELEGRAM_BOT_TOKEN must be set")
@@ -59,12 +93,12 @@ func main() {
 	//botAPIURL := "http://localhost:8081/bot%s/%s"
 	//bot, err := tgbotapi.NewBotAPIWithAPIEndpoint(botToken, botAPIURL)
 
-	bot, err := tgbotapi.NewBotAPI(botToken)
+	botAPI, err := tgbotapi.NewBotAPI(botToken)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	tgBot := tg.NewBot(bot)
+	tgBot := tg.NewBot(botAPI)
 	if err := tgBot.StartBot(); err != nil {
 		log.Fatal(err)
 	}
