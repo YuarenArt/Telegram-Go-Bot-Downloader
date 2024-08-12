@@ -82,7 +82,7 @@ func (yh *YoutubeHandler) processSingleVideo(bot *tgbotapi.BotAPI, callbackQuery
 		log.Println("can't get video in processSingleVideo: " + err.Error())
 	}
 	formats := video.Formats
-	keyboard, err := getKeyboardVideoFormats(formats, videoURL)
+	keyboard, err := getKeyboardVideoFormats(&formats, &videoURL)
 	if err != nil {
 		log.Println("Error after getKeyboardVideoFormats in processSingleVideo: " + err.Error())
 		send.SendReplyMessage(bot, callbackQuery.Message, "Something went wrong. Sorry!")

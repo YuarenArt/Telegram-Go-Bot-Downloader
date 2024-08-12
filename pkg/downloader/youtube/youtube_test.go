@@ -1,7 +1,6 @@
 package youtube
 
 import (
-	"context"
 	"github.com/golang/mock/gomock"
 	"github.com/kkdai/youtube/v2"
 	"github.com/kkdai/youtube/v2/downloader"
@@ -105,12 +104,4 @@ func TestGetVideo(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestDownloadVideoWithFormatComposite(t *testing.T) {
-	downloader := NewYouTubeDownloader()
-	video, _ := downloader.Downloader.GetVideo("https://youtu.be/LXb3EKWsInQ?si=b5U_ILrEtBbOa_zZ")
-	downloader.DownloadVideoWithFormatComposite(context.Background(), "", video,
-		"720", "", "")
-	// video/mp4; codecs="avc1.640028"
 }

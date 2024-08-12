@@ -45,7 +45,6 @@ func (ytd *YouTubeDownloader) DownloadVideo(video *youtube.Video) (pathAndName s
 
 // DownloadAudio downloads audio with the highest quality
 func (ytd *YouTubeDownloader) DownloadAudio(video *youtube.Video) (pathAndName string, err error) {
-	title := SanitizeFilename(video.Title)
 
 	formats := video.Formats.WithAudioChannels()
 	formats, err = WithFormats(&formats, AUDIO_PREFIX)
@@ -54,11 +53,11 @@ func (ytd *YouTubeDownloader) DownloadAudio(video *youtube.Video) (pathAndName s
 	}
 	formats.Sort()
 	format := formats[0]
-	ctx := context.Background()
-	if err := ytd.DownloadVideoWithFormat(ctx, video, &format, ""); err != nil {
+	if err := ytd.DownloadVideoWithFormat(context.Background(), video, &format, ""); err != nil {
 		fmt.Println(err)
 	}
 
+	title := SanitizeFilename(video.Title)
 	fileFormat, err := getFormatByMimeType(format.MimeType)
 	pathAndName = DOWNLOAD_DIR + title + fileFormat
 
@@ -83,8 +82,7 @@ func (ytd *YouTubeDownloader) DownloadWithFormat(videoURL string, format youtube
 	mimeType = mimeTypeParts[0]
 	pathAndName = DOWNLOAD_DIR + title + canonicals[mimeType]
 
-	ctx := context.Background()
-	err = ytd.DownloadVideoWithFormat(ctx, video, &format, "")
+	err = ytd.DownloadVideoWithFormat(context.Background(), video, &format, "")
 	if err != nil {
 		log.Println(err)
 		return pathAndName, err
@@ -95,7 +93,7 @@ func (ytd *YouTubeDownloader) DownloadWithFormat(videoURL string, format youtube
 	return pathAndName, nil
 }
 
-// DownloadWithFormatComposite downloads a file by a link with a certain video format
+// DownloadWithFormatComposite downloads a file by a link with a certain video format and returns a path to file
 func (ytd *YouTubeDownloader) DownloadWithFormatComposite(videoURL string, format youtube.Format) (pathAndName string, err error) {
 	if !isAcceptableFileSize(format) {
 		return "", fmt.Errorf("file's size too large. Acceptable size is %.2f Mb", MaxFileSize/(1024*1024))

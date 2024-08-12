@@ -48,7 +48,7 @@ func (yh *YoutubeHandler) handleYoutubeLink(message *tgbotapi.Message) (*tgbotap
 }
 
 // getKeyboard return InlineKeyboardMarkup by all possible video formats. Button's data include video's url and ItagNo
-func getKeyboardVideoFormats(formats youtube.FormatList, url string) (*tgbotapi.InlineKeyboardMarkup, error) {
+func getKeyboardVideoFormats(formats *youtube.FormatList, url *string) (*tgbotapi.InlineKeyboardMarkup, error) {
 	keyboard := tgbotapi.NewInlineKeyboardMarkup()
 
 	// Gets size of audio with maximum quality for downloading video. Adds size for button
@@ -60,24 +60,20 @@ func getKeyboardVideoFormats(formats youtube.FormatList, url string) (*tgbotapi.
 	}
 	audioSize = audioSize / (1024 * 1024) // Mb
 
-	for _, format := range formats {
-
-		mimeType := format.MimeType
+	for _, format := range *formats {
 
 		//ignore a .webm format
-		if strings.HasPrefix(mimeType, "audio/webm") || strings.HasPrefix(mimeType, "video/webm") {
+		if strings.HasPrefix(format.MimeType, "audio/webm") || strings.HasPrefix(format.MimeType, "video/webm") {
 			continue
 		}
 
-		videoFormat := strings.Split(mimeType, ";")[0]
-		qualityLabel := format.QualityLabel
-
-		data := fmt.Sprintf("%s,%s", url, strconv.Itoa(format.ItagNo))
+		videoFormat := strings.Split(format.MimeType, ";")[0]
+		data := fmt.Sprintf("%s,%s", *url, strconv.Itoa(format.ItagNo))
 
 		size, err := getFileSize(format)
 		size = size / (1024 * 1024)
 		// if downloads video adds additional size for separate audio file
-		if strings.HasPrefix(mimeType, "video") {
+		if strings.HasPrefix(format.MimeType, "video") {
 			size += audioSize
 		}
 		if err != nil {
@@ -85,8 +81,8 @@ func getKeyboardVideoFormats(formats youtube.FormatList, url string) (*tgbotapi.
 		}
 
 		sign := []string{videoFormat}
-		if qualityLabel != "" {
-			sign = append(sign, qualityLabel)
+		if format.QualityLabel != "" {
+			sign = append(sign, format.QualityLabel)
 		}
 		sign = append(sign, strconv.FormatFloat(size, 'f', 2, 64))
 

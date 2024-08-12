@@ -3,12 +3,11 @@ package youtube
 import (
 	"errors"
 	"fmt"
-	"github.com/kkdai/youtube/v2"
+	. "github.com/kkdai/youtube/v2"
 	"github.com/kkdai/youtube/v2/downloader"
 	"log"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
 )
@@ -43,7 +42,7 @@ func (ytd *YouTubeDownloader) SetDownloadDir(dir string) {
 func NewYouTubeDownloader() *YouTubeDownloader {
 	return &YouTubeDownloader{
 		Downloader: downloader.Downloader{
-			Client:    youtube.Client{},
+			Client:    Client{},
 			OutputDir: DOWNLOAD_DIR,
 		},
 	}
@@ -51,30 +50,27 @@ func NewYouTubeDownloader() *YouTubeDownloader {
 
 // GetVideo retrieves a YouTube video by its URL and returns a pointer to a
 // YouTube.Video struct that contains the video's metadata
-func (ytd *YouTubeDownloader) GetVideo(videoURL string) (*youtube.Video, error) {
-	log.Printf("Getting video from URL: %s", videoURL)
-
-	video, err := ytd.Downloader.Client.GetVideo(videoURL)
-	if err != nil {
-		log.Printf("Failed to get video from URL: %s, error: %s", videoURL, err)
-		return nil, err
-	}
-	log.Printf("Got video: %s", video.Title)
-	return video, err
+func (ytd *YouTubeDownloader) GetVideo(url string) (*Video, error) {
+	log.Printf("Getting video from URL: %s", url)
+	return ytd.Downloader.Client.GetVideo(url)
 }
 
-func (ytd *YouTubeDownloader) GetPlaylist(url string) (*youtube.Playlist, error) {
+// GetPlaylist playlist return Playlist struct
+func (ytd *YouTubeDownloader) GetPlaylist(url string) (*Playlist, error) {
+	log.Printf("Getting playlist from URL: %s", url)
 	return ytd.Downloader.Client.GetPlaylist(url)
 }
 
-func (ytd *YouTubeDownloader) GetVideoFromPlaylistEntry(entry *youtube.PlaylistEntry) (*youtube.Video, error) {
+// GetVideoFromPlaylistEntry return certain Video from playlist
+func (ytd *YouTubeDownloader) GetVideoFromPlaylistEntry(entry *PlaylistEntry) (*Video, error) {
+	log.Printf("Getting video from playlist: %s", entry.Title)
 	return ytd.Downloader.Client.VideoFromPlaylistEntry(entry)
 }
 
 // WithFormats returns a new FormatList that contains only a formats
 // from the given list that have the following prefix (i.e "video/", "audio/")
-func WithFormats(list *youtube.FormatList, prefix string) (youtube.FormatList, error) {
-	var result youtube.FormatList
+func WithFormats(list *FormatList, prefix string) (FormatList, error) {
+	var result FormatList
 
 	if !contains(SupportedPrefixesFormat, prefix) {
 		return nil, fmt.Errorf("unsupported prefix: %s", prefix)
@@ -90,8 +86,8 @@ func WithFormats(list *youtube.FormatList, prefix string) (youtube.FormatList, e
 }
 
 // FormatWithAudioChannels return a new FormatList that contains only a formats with audio
-func FormatWithAudioChannels(videoURL string) (youtube.FormatList, error) {
-	client := youtube.Client{}
+func FormatWithAudioChannels(videoURL string) (FormatList, error) {
+	client := Client{}
 	video, err := client.GetVideo(videoURL)
 	if err != nil {
 		log.Print(err)
@@ -102,15 +98,17 @@ func FormatWithAudioChannels(videoURL string) (youtube.FormatList, error) {
 	return formats, nil
 }
 
-func FormatWithAudioChannelsComposite(videoURL string) (youtube.FormatList, error) {
-	client := youtube.Client{}
+// FormatWithAudioChannelsComposite return a new FormatList
+// that contains only a formats with audio in various quality combinations
+func FormatWithAudioChannelsComposite(videoURL string) (FormatList, error) {
+	client := Client{}
 	video, err := client.GetVideo(videoURL)
 	if err != nil {
 		log.Print(err)
 		return nil, err
 	}
 
-	var formats youtube.FormatList
+	var formats FormatList
 	uniqueFormats := make(map[int]bool)
 	for _, format := range video.Formats {
 		if _, exists := uniqueFormats[format.ItagNo]; !exists {
@@ -120,11 +118,6 @@ func FormatWithAudioChannelsComposite(videoURL string) (youtube.FormatList, erro
 	}
 
 	return formats, nil
-}
-
-func FormatWithAudioChannelsByVideo(video *youtube.Video) youtube.FormatList {
-	formats := video.Formats.WithAudioChannels()
-	return formats
 }
 
 // contains return true if item in slice
@@ -143,15 +136,7 @@ func fileExists(filePath string) bool {
 	return !os.IsNotExist(err)
 }
 
-// delete all unacceptable symbols for Mac, Windows, Ubuntu file system
-func cleanVideoTitle(title string) string {
-	title = regexp.MustCompile(`[/\\:*?"<>|]`).ReplaceAllString(title, "")
-	title = regexp.MustCompile(`\s+`).ReplaceAllString(title, " ")
-
-	return title
-}
-
-// return a format of file (.mp4, .m4a, .weba) according to a mimeType
+// return a format of file according to it's mimeType
 func getFormatByMimeType(mimeType string) (string, error) {
 	mimeTypeParts := strings.Split(mimeType, ";")
 	format := canonicals[mimeTypeParts[0]]
@@ -161,7 +146,7 @@ func getFormatByMimeType(mimeType string) (string, error) {
 	return format, nil
 }
 
-// change any file extension on .mp3
+// ChangeFileExtension changes to the specified extension
 func ChangeFileExtension(filePath, extension string) error {
 	// Check if the file exists
 	if _, err := os.Stat(filePath); err != nil {
@@ -183,13 +168,13 @@ func ChangeFileExtension(filePath, extension string) error {
 }
 
 // isAcceptableFileSize return true if file size less than possible size to send to tg API
-func isAcceptableFileSize(format youtube.Format) bool {
+func isAcceptableFileSize(format Format) bool {
 	fileSize, _ := getFileSize(format)
 	return fileSize < MaxFileSize
 }
 
 // getFileSize return a file size in bite of certain format
-func getFileSize(format youtube.Format) (float64, error) {
+func getFileSize(format Format) (float64, error) {
 
 	// get durations in secs
 	duration, err := strconv.ParseFloat(format.ApproxDurationMs, 64)
@@ -198,11 +183,8 @@ func getFileSize(format youtube.Format) (float64, error) {
 	}
 	duration /= 1000
 
-	// get bitrate in bite\sec
-	bitrate := format.Bitrate
-
 	// size in bite
-	contentLength := float64(bitrate/8) * duration
+	contentLength := float64(format.Bitrate/8) * duration
 
 	return contentLength, nil
 }

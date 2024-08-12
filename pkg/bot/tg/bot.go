@@ -33,7 +33,7 @@ func (tb *TgBot) StartBot() error {
 	if err != nil {
 		log.Fatal(err)
 	}
-	if err := clearDownloadDirs(dir); err != nil {
+	if err = clearDownloadDirs(dir); err != nil {
 		log.Println(err.Error())
 	}
 

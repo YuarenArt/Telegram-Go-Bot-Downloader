@@ -31,7 +31,7 @@ func (tb *TgBot) handleUpdates(updates tgbotapi.UpdatesChannel) {
 		case update.CallbackQuery != nil:
 			tb.handleCallbackQuery(update.CallbackQuery)
 		default:
-			log.Println("unknown case")
+			log.Println("unknown user's message")
 			tb.handleDefaultCommand(update.Message)
 		}
 
@@ -66,7 +66,6 @@ func (tb *TgBot) handleMessage(message *tgbotapi.Message) {
 		} else {
 			send.SendKeyboardMessageReply(tb.Bot, message, keyboard)
 		}
-
 	default:
 		tb.handleDefaultCommand(message)
 		tb.handleHelpCommand(message)

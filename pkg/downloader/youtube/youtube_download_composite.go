@@ -225,6 +225,7 @@ func pickIdealFileExtension(mediaType string) string {
 	return extensions[0]
 }
 
+// SanitizeFilename clear all unsupported symbols for mac, linux, windows
 func SanitizeFilename(fileName string) string {
 	// Characters not allowed on mac
 	//	:/

@@ -91,7 +91,7 @@ func main() {
 
 	//botAPIURL := "http://telegram-bot-api:8081/bot%s/%s"
 	//botAPIURL := "http://localhost:8081/bot%s/%s"
-	//bot, err := tgbotapi.NewBotAPIWithAPIEndpoint(botToken, botAPIURL)
+	//botAPI, err := tgbotapi.NewBotAPIWithAPIEndpoint(botToken, botAPIURL)
 
 	botAPI, err := tgbotapi.NewBotAPI(botToken)
 	if err != nil {

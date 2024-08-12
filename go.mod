@@ -8,6 +8,7 @@ require (
 	github.com/kkdai/youtube/v2 v2.10.1
 	github.com/spf13/viper v1.18.2
 	github.com/stretchr/testify v1.9.0
+	github.com/vbauerster/mpb/v5 v5.4.0
 )
 
 require (
@@ -34,7 +35,6 @@ require (
 	github.com/spf13/cast v1.6.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
-	github.com/vbauerster/mpb/v5 v5.4.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/exp v0.0.0-20240222234643-814bf88cf225 // indirect
 	golang.org/x/sys v0.18.0 // indirect

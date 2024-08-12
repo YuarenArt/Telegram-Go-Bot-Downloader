@@ -21,7 +21,7 @@ func (yh *YoutubeHandler) handleYoutubeStream(message *tgbotapi.Message) (*tgbot
 		return nil, err
 	}
 
-	keyboard, err := getKeyboardVideoFormats(formats, videoURL)
+	keyboard, err := getKeyboardVideoFormats(&formats, &videoURL)
 	if err != nil {
 		log.Printf("GetKeyboard return %s", err)
 		return nil, err
