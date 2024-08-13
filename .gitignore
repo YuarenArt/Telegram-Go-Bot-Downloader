@@ -5,3 +5,6 @@
 /download
 config.yaml
 go.sum
+
+cert.pem
+key.pem

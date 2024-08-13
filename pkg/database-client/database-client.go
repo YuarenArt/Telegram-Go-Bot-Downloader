@@ -3,15 +3,21 @@ package database_client
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
-	"net/http"
+	"log"
+	"os"
 	"time"
+
+	"github.com/YuarenArt/tg-users-database/pkg/db"
+	"net/http"
 )
 
 const (
-	timeout = 15 * time.Second
-	baseURL = "http://tg-database:8082"
+	timeout = 20 * time.Second
+	baseURL = "https://localhost:8082" // https://localhost:8082 or https://tg-database:8082]
 )
 
 // Client is a structure that contains the HTTP client and the base URL of the server.
@@ -20,30 +26,49 @@ type Client struct {
 	baseURL    string
 }
 
-type User struct {
-	ID                 int64  `json:"id"`
-	TelegramUsername   string `json:"username"`
-	SubscriptionStatus string `json:"subscription_status"`
-}
-
-// NewUser initializes and returns a new User.
-func NewUser(username string) *User {
-	return &User{
-		TelegramUsername:   username,
-		SubscriptionStatus: "inactive",
-	}
-}
-
 // NewClient initializes and returns a new Client.
 func NewClient() *Client {
+
+	certFile := "cert.pem"
+	cert, err := os.ReadFile(certFile)
+	if err != nil {
+		log.Printf("Failed to read certificate file: %v", err)
+	}
+
+	// Create a certificate pool from the self-signed certificate
+	certPool := x509.NewCertPool()
+	if !certPool.AppendCertsFromPEM(cert) {
+		log.Println("failed to append certificate")
+	}
+
+	tlsConfig := &tls.Config{
+		RootCAs: certPool,
+	}
+
+	client := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: tlsConfig,
+		},
+		Timeout: timeout,
+	}
+
 	return &Client{
-		httpClient: &http.Client{Timeout: timeout},
+		httpClient: client,
 		baseURL:    baseURL,
 	}
 }
 
+// NewUser initializes and returns a new User.
+func NewUser(username string, ChatID int64) *db.User {
+	return &db.User{
+		Username: username,
+		Traffic:  0,
+		ChatID:   ChatID,
+	}
+}
+
 // CreateUser sends a request to create a new user.
-func (c *Client) CreateUser(ctx context.Context, newUser *User) error {
+func (c *Client) CreateUser(ctx context.Context, newUser *db.User) error {
 	url := fmt.Sprintf("%s/users", c.baseURL)
 	body, err := json.Marshal(newUser)
 	if err != nil {
@@ -70,7 +95,7 @@ func (c *Client) CreateUser(ctx context.Context, newUser *User) error {
 }
 
 // GetUser sends a request to retrieve a user by username.
-func (c *Client) GetUser(ctx context.Context, username string) (*User, error) {
+func (c *Client) GetUser(ctx context.Context, username string) (*db.User, error) {
 	url := fmt.Sprintf("%s/users/%s", c.baseURL, username)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -89,7 +114,7 @@ func (c *Client) GetUser(ctx context.Context, username string) (*User, error) {
 		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
 
-	var retrievedUser User
+	var retrievedUser db.User
 	if err := json.NewDecoder(resp.Body).Decode(&retrievedUser); err != nil {
 		return nil, fmt.Errorf("failed to decode response body: %w", err)
 	}

@@ -87,7 +87,7 @@ func (tb *TgBot) ensureUserExists(ctx context.Context, message *tgbotapi.Message
 		return fmt.Errorf("error checking if user exists: %w", err)
 	}
 	if !exist {
-		newUser := database_client.NewUser(username)
+		newUser := database_client.NewUser(username, message.Chat.ID)
 		if err := tb.Client.CreateUser(ctx, newUser); err != nil {
 			return fmt.Errorf("error creating new user: %w", err)
 		}
