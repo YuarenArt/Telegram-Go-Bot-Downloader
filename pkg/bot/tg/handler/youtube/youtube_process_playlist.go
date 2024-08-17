@@ -7,16 +7,29 @@ import (
 	"log"
 	"strings"
 	"youtube_downloader/pkg/bot/tg/send"
+	database_client "youtube_downloader/pkg/database-client"
 	youtube_downloader "youtube_downloader/pkg/downloader/youtube"
 )
 
-func (yh *YoutubeHandler) processPlaylistAudio(bot *tgbotapi.BotAPI, callbackQuery *tgbotapi.CallbackQuery, playlist *youtube.Playlist) {
+func (yh *YoutubeHandler) processPlaylistAudio(bot *tgbotapi.BotAPI, callbackQuery *tgbotapi.CallbackQuery, playlist *youtube.Playlist, client *database_client.Client) {
 	downloader := youtube_downloader.NewYouTubeDownloader()
 	for _, playlistEntry := range playlist.Videos {
 		video, err := downloader.GetVideoFromPlaylistEntry(playlistEntry)
 		if err != nil {
 			log.Printf("VideoFromPlaylistEntry error: %v", err)
 			continue
+		}
+
+		formats := video.Formats.WithAudioChannels()
+		formats.Sort()
+		formats, err = youtube_downloader.WithFormats(&video.Formats, youtube_downloader.AUDIO_PREFIX)
+
+		if !checkTraffic(client, callbackQuery, bot, &formats[0]) {
+			_, err := send.SendReplyMessage(bot, callbackQuery.Message, send.TrafficLimit)
+			if err != nil {
+				log.Printf("can't send reply message: %s", err.Error())
+			}
+			return
 		}
 
 		// start downloading
@@ -30,19 +43,36 @@ func (yh *YoutubeHandler) processPlaylistAudio(bot *tgbotapi.BotAPI, callbackQue
 			log.Printf("downloadAudio error: %v", err)
 			continue
 		}
+		fileSize, err := getFileSize(formats[0]) // bite
+		fileSize = fileSize / (1024 * 1024)      // Mb
+		if err != nil {
+			log.Printf("can't file size: %s", err.Error())
+		}
 
 		// start sending
-		go sendAnswer(bot, callbackQuery, &resp, &path)
+		go sendAnswer(bot, callbackQuery, &resp, &path, client, &fileSize)
 	}
 }
 
-func (yh *YoutubeHandler) processPlaylistVideo(bot *tgbotapi.BotAPI, callbackQuery *tgbotapi.CallbackQuery, playlist *youtube.Playlist) {
+func (yh *YoutubeHandler) processPlaylistVideo(bot *tgbotapi.BotAPI, callbackQuery *tgbotapi.CallbackQuery, playlist *youtube.Playlist, client *database_client.Client) {
 	downloader := youtube_downloader.NewYouTubeDownloader()
 	for _, playlistEntry := range playlist.Videos {
 		video, err := downloader.GetVideoFromPlaylistEntry(playlistEntry)
 		if err != nil {
 			log.Printf("VideoFromPlaylistEntry error: %v", err)
 			continue
+		}
+
+		formats := video.Formats.WithAudioChannels()
+		formats.Sort()
+		formats, err = youtube_downloader.WithFormats(&video.Formats, youtube_downloader.VIDEO_PREFIX)
+
+		if !checkTraffic(client, callbackQuery, bot, &video.Formats[len(formats)-1]) {
+			_, err := send.SendReplyMessage(bot, callbackQuery.Message, send.TrafficLimit)
+			if err != nil {
+				log.Printf("can't send reply message: %s", err.Error())
+			}
+			return
 		}
 
 		// start downloading
@@ -57,8 +87,14 @@ func (yh *YoutubeHandler) processPlaylistVideo(bot *tgbotapi.BotAPI, callbackQue
 			continue
 		}
 
+		fileSize, err := getFileSize(formats[len(formats)-1]) // bite
+		fileSize = fileSize / (1024 * 1024)                   // Mb
+		if err != nil {
+			log.Printf("can't file size: %s", err.Error())
+		}
+
 		// start sending
-		go sendAnswer(bot, callbackQuery, &resp, &path)
+		go sendAnswer(bot, callbackQuery, &resp, &path, client, &fileSize)
 	}
 }
 
@@ -80,6 +116,7 @@ func (yh *YoutubeHandler) processSingleVideo(bot *tgbotapi.BotAPI, callbackQuery
 	video, err := downloader.GetVideo(videoURL)
 	if err != nil {
 		log.Println("can't get video in processSingleVideo: " + err.Error())
+		return
 	}
 	formats := video.Formats
 	keyboard, err := getKeyboardVideoFormats(&formats, &videoURL)

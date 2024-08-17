@@ -22,7 +22,7 @@ type TgBot struct {
 func NewBot(bot *tgbotapi.BotAPI) *TgBot {
 	return &TgBot{
 		Bot:    bot,
-		Client: database_client.NewClient(),
+		Client: database_client.NewClient(bot.Token),
 	}
 }
 

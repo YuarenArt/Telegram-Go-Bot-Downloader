@@ -65,15 +65,9 @@ func (ytd *YouTubeDownloader) DownloadAudio(video *youtube.Video) (pathAndName s
 }
 
 // DownloadWithFormat downloads a file by a link with a certain video format
-func (ytd *YouTubeDownloader) DownloadWithFormat(videoURL string, format youtube.Format) (pathAndName string, err error) {
+func (ytd *YouTubeDownloader) DownloadWithFormat(video *youtube.Video, format youtube.Format) (pathAndName string, err error) {
 	if !isAcceptableFileSize(format) {
 		return "", fmt.Errorf("file's size too large. Acceptable size is %.2f Mb", MaxFileSize/(1024*1024))
-	}
-
-	video, err := ytd.GetVideo(videoURL)
-	if err != nil {
-		log.Print(err)
-		return "", err
 	}
 
 	title := SanitizeFilename(video.Title)

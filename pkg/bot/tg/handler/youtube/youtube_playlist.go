@@ -8,6 +8,10 @@ import (
 	youtube_downloader "youtube_downloader/pkg/downloader/youtube"
 )
 
+const (
+	youtubeCheckPlaylist = "https://youtu.be/check" // for checking youtube link format
+)
+
 // handleYoutubePlaylist gets playlist,
 // creates and return keyboard with all videos from it
 func (yh *YoutubeHandler) handleYoutubePlaylist(message *tgbotapi.Message) (*tgbotapi.InlineKeyboardMarkup, error) {
@@ -31,17 +35,17 @@ func getKeyboardPlaylist(playlist *youtube.Playlist) tgbotapi.InlineKeyboardMark
 	keyboard := tgbotapi.NewInlineKeyboardMarkup()
 
 	button := tgbotapi.NewInlineKeyboardButtonData(
-		fmt.Sprintf("%s", "Download all: video"), "https://youtu.be"+","+All_video)
+		fmt.Sprintf("%s", "Download all: video"), youtubeCheckPlaylist+","+All_video)
 	keyboard.InlineKeyboard = append(keyboard.InlineKeyboard, []tgbotapi.InlineKeyboardButton{button})
 
 	button = tgbotapi.NewInlineKeyboardButtonData(
-		fmt.Sprintf("%s", "Download all: audio"), "https://youtu.be"+","+All_audio)
+		fmt.Sprintf("%s", "Download all: audio"), youtubeCheckPlaylist+","+All_audio)
 	keyboard.InlineKeyboard = append(keyboard.InlineKeyboard, []tgbotapi.InlineKeyboardButton{button})
 
 	for _, playlistEntry := range playlist.Videos {
 
 		button := tgbotapi.NewInlineKeyboardButtonData(
-			fmt.Sprintf("%s", playlistEntry.Title), "https://youtu.be"+","+playlistEntry.ID)
+			fmt.Sprintf("%s", playlistEntry.Title), youtubeCheckPlaylist+","+playlistEntry.ID)
 		keyboard.InlineKeyboard = append(keyboard.InlineKeyboard, []tgbotapi.InlineKeyboardButton{button})
 	}
 

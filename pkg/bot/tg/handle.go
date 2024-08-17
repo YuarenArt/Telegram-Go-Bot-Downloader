@@ -6,6 +6,7 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"log"
 	"strings"
+	"time"
 	"youtube_downloader/pkg/bot/tg/handler"
 	"youtube_downloader/pkg/bot/tg/handler/youtube"
 	"youtube_downloader/pkg/bot/tg/send"
@@ -16,7 +17,9 @@ import (
 func (tb *TgBot) handleUpdates(updates tgbotapi.UpdatesChannel) {
 
 	for update := range updates {
-		ctx := context.Background()
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+		defer cancel()
+
 		if err := tb.ensureUserExists(ctx, update.Message); err != nil {
 			log.Println(err)
 		}

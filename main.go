@@ -1,8 +1,9 @@
 package main
 
 import (
+	"fmt"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
-	"github.com/spf13/viper"
+	"github.com/joho/godotenv"
 	"log"
 	"os"
 	"os/signal"
@@ -11,16 +12,6 @@ import (
 	"syscall"
 	"youtube_downloader/pkg/bot/tg"
 )
-
-func initConfig() {
-	viper.SetConfigName("config")
-	viper.AddConfigPath(".")
-	viper.AutomaticEnv()
-
-	if err := viper.ReadInConfig(); err != nil {
-		log.Fatalf("Error reading config file, %s", err)
-	}
-}
 
 // startProfiling initializes CPU and memory profiling and sets up signal handling for graceful shutdown.
 func startProfiling(cpuProfile, memProfile string) (cleanup func(), err error) {
@@ -83,17 +74,26 @@ func main() {
 	}
 	defer cleanup()
 
-	initConfig()
-	botToken := viper.GetString("TELEGRAM_BOT_TOKEN")
+	err = godotenv.Load()
+	if err != nil {
+		log.Fatalf("Error loading .env file: %v", err)
+	}
+
+	botToken := os.Getenv("TELEGRAM_BOT_TOKEN")
 	if botToken == "" {
 		log.Fatal("TELEGRAM_BOT_TOKEN must be set")
 	}
 
-	//botAPIURL := "http://telegram-bot-api:8081/bot%s/%s"
-	//botAPIURL := "http://localhost:8081/bot%s/%s"
-	//botAPI, err := tgbotapi.NewBotAPIWithAPIEndpoint(botToken, botAPIURL)
+	host := os.Getenv("HOST") // telegram-bot-api:8081 (docker network) || localhost:8081 || empty "" for default without botAPIEndpoint
+	var botAPIEndpoint string
+	var botAPI *tgbotapi.BotAPI
+	if host != "" {
+		botAPIEndpoint = fmt.Sprintf("http://%s/bot%%s/%%s", host)
+		botAPI, err = tgbotapi.NewBotAPIWithAPIEndpoint(botToken, botAPIEndpoint)
+	} else {
+		botAPI, err = tgbotapi.NewBotAPI(botToken)
+	}
 
-	botAPI, err := tgbotapi.NewBotAPI(botToken)
 	if err != nil {
 		log.Fatal(err)
 	}

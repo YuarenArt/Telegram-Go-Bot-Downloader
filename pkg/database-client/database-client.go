@@ -7,6 +7,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"fmt"
+	"github.com/joho/godotenv"
 	"log"
 	"os"
 	"time"
@@ -17,17 +18,22 @@ import (
 
 const (
 	timeout = 20 * time.Second
-	baseURL = "https://localhost:8082" // https://localhost:8082 or https://tg-database:8082]
 )
+
+var durations = [3]string{"month", "year", "forever"}
+var subscriptionStatus = [2]string{"inactive", "active"}
+
+// TODO add payment
 
 // Client is a structure that contains the HTTP client and the base URL of the server.
 type Client struct {
 	httpClient *http.Client
 	baseURL    string
+	token      string
 }
 
 // NewClient initializes and returns a new Client.
-func NewClient() *Client {
+func NewClient(token string) *Client {
 
 	certFile := "cert.pem"
 	cert, err := os.ReadFile(certFile)
@@ -52,9 +58,16 @@ func NewClient() *Client {
 		Timeout: timeout,
 	}
 
+	err = godotenv.Load()
+	if err != nil {
+		log.Fatalf("Error loading .env file: %v", err)
+	}
+	baseURL := os.Getenv("DB_URL")
+
 	return &Client{
 		httpClient: client,
 		baseURL:    baseURL,
+		token:      token,
 	}
 }
 
@@ -64,6 +77,12 @@ func NewUser(username string, ChatID int64) *db.User {
 		Username: username,
 		Traffic:  0,
 		ChatID:   ChatID,
+		Subscription: db.Subscription{
+			StartSubscription:  time.Now(),
+			EndSubscription:    time.Now(),
+			SubscriptionStatus: subscriptionStatus[0],
+			Duration:           durations[0],
+		},
 	}
 }
 
@@ -80,6 +99,7 @@ func (c *Client) CreateUser(ctx context.Context, newUser *db.User) error {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+c.token)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -103,6 +123,7 @@ func (c *Client) GetUser(ctx context.Context, username string) (*db.User, error)
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+c.token)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -131,6 +152,7 @@ func (c *Client) GetSubscriptionStatus(ctx context.Context, username string) (st
 		return "", err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+c.token)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -160,6 +182,7 @@ func (c *Client) IsUserExist(ctx context.Context, username string) (bool, error)
 		return false, err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+c.token)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -175,4 +198,33 @@ func (c *Client) IsUserExist(ctx context.Context, username string) (bool, error)
 	}
 
 	return false, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+}
+
+func (c *Client) UpdateTraffic(ctx context.Context, username string, traffic float64) error {
+
+	url := fmt.Sprintf("%s/users/%s/traffic", c.baseURL, username)
+
+	body, err := json.Marshal(traffic)
+	if err != nil {
+		return fmt.Errorf("failed to marshal traffic: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewBuffer(body))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+c.token)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to update user's traffic: status %d", resp.StatusCode)
+	}
+	return nil
 }

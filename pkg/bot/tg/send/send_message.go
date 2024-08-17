@@ -8,6 +8,8 @@ import (
 const (
 	DownloadingNotification = "⏳ Downloading... ⏳"
 	SendingNotification     = " 🚀 Sending... 🚀"
+	TrafficLimit            = "You have exceeded the monthly traffic limit of 5000 MB, and it will be updated next month. ⏳" +
+		"\nIn order not to wait, you can subscribe! 📈"
 )
 
 // SendMessage just sends text message using BotAPI Send

@@ -18,7 +18,7 @@ func (tb *TgBot) handleCallbackQuery(callbackQuery *tgbotapi.CallbackQuery) {
 
 	switch {
 	case isYoutubeLink(URL):
-		tb.handlers[YoutubeHandler].HandleCallbackQuery(callbackQuery, tb.Bot)
+		tb.handlers[YoutubeHandler].HandleCallbackQuery(callbackQuery, tb.Bot, tb.Client)
 	default:
 		log.Printf("handleCallbackQuery get default case with %s link", URL)
 		send.SendReplyMessage(tb.Bot, callbackQuery.Message, "Something went wrong")

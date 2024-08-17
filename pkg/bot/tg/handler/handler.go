@@ -3,6 +3,7 @@ package handler
 import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"youtube_downloader/pkg/bot/tg/handler/youtube"
+	database_client "youtube_downloader/pkg/database-client"
 )
 
 type HandlerType int
@@ -17,7 +18,7 @@ var SupportedHandlers = []HandlerType{
 
 type Handler interface {
 	HandleMessage(message *tgbotapi.Message) (*tgbotapi.InlineKeyboardMarkup, error)
-	HandleCallbackQuery(callbackQuery *tgbotapi.CallbackQuery, bot *tgbotapi.BotAPI)
+	HandleCallbackQuery(callbackQuery *tgbotapi.CallbackQuery, bot *tgbotapi.BotAPI, client *database_client.Client)
 }
 
 func CreateHandler(handlerType HandlerType) Handler {
