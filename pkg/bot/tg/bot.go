@@ -1,10 +1,13 @@
 package tg
 
 import (
+	"encoding/json"
+	"fmt"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"log"
 	"os"
 	"path/filepath"
+	"sync"
 	"youtube_downloader/pkg/bot/tg/handler"
 	_ "youtube_downloader/pkg/database-client"
 	database_client "youtube_downloader/pkg/database-client"
@@ -13,22 +16,66 @@ import (
 // TgBot uses telegram-Bot-api to maintain tg Bot
 // It can download and send video with different formats (video/audio; quality) by handlers
 type TgBot struct {
-	Bot      *tgbotapi.BotAPI
-	handlers []handler.Handler
-	Client   *database_client.Client
+	Bot          *tgbotapi.BotAPI
+	handlers     []handler.Handler
+	Client       *database_client.Client
+	translations map[string]map[string]string
+}
+
+var (
+	instance *TgBot
+	once     sync.Once
+)
+
+// LoadTranslations loads language files into memory
+func (tb *TgBot) LoadTranslations() error {
+	languages := []string{"en", "ru"}
+	tb.translations = make(map[string]map[string]string)
+
+	for _, lang := range languages {
+		filePath := fmt.Sprintf("cmd/locales/%s.json", lang)
+		file, err := os.Open(filePath)
+		if err != nil {
+			return fmt.Errorf("could not open translation file: %v", err)
+		}
+		defer file.Close()
+
+		var translation map[string]string
+		if err := json.NewDecoder(file).Decode(&translation); err != nil {
+			return fmt.Errorf("could not decode translation file: %v", err)
+		}
+
+		tb.translations[lang] = translation
+	}
+	return nil
 }
 
 // NewBot initializes a new TgBot instance with the given Telegram Bot API instance.
-func NewBot(bot *tgbotapi.BotAPI) *TgBot {
+func newBot(bot *tgbotapi.BotAPI) *TgBot {
 	return &TgBot{
 		Bot:    bot,
 		Client: database_client.NewClient(bot.Token),
 	}
 }
 
+// GetBotInstance returns the singleton instance of TgBot.
+// If the instance does not exist, it initializes it.
+func GetBotInstance(bot *tgbotapi.BotAPI) *TgBot {
+	once.Do(func() {
+		instance = newBot(bot)
+	})
+	return instance
+}
+
 // StartBot starts the Bot by authorizing it and initiating the update handling process.
 func (tb *TgBot) StartBot() error {
 	log.Printf("Authorized on account %s", tb.Bot.Self.UserName)
+
+	// Load translations
+	if err := tb.LoadTranslations(); err != nil {
+		log.Fatal("Error loading translations:", err)
+	}
+
 	dir, err := os.Getwd()
 	if err != nil {
 		log.Fatal(err)
@@ -116,4 +163,18 @@ func clearDownloadDirs(rootDir string) error {
 		return err
 	}
 	return nil
+}
+
+// SetCommands sets the commands for the bot
+func (tb *TgBot) SetCommands() {
+	commands := []tgbotapi.BotCommand{
+		{Command: commandStart, Description: "Start the bot"},
+		{Command: commandHelp, Description: "Get help"},
+		{Command: commandPay, Description: "Subscribe to premium features"},
+	}
+
+	config := tgbotapi.NewSetMyCommands(commands...)
+	if _, err := tb.Bot.Request(config); err != nil {
+		log.Println("Error setting bot commands:", err)
+	}
 }

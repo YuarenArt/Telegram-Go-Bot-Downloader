@@ -15,7 +15,6 @@ import (
 
 // handleUpdates gets updates from telegramAPI and handles it
 func (tb *TgBot) handleUpdates(updates tgbotapi.UpdatesChannel) {
-
 	for update := range updates {
 		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 		defer cancel()
@@ -25,19 +24,35 @@ func (tb *TgBot) handleUpdates(updates tgbotapi.UpdatesChannel) {
 		}
 
 		switch {
-		case update.Message != nil:
+		case update.Message != nil && update.Message.SuccessfulPayment == nil:
 			if update.Message.IsCommand() {
 				tb.handleCommand(update.Message)
+				continue
+			} else if update.Message.SuccessfulPayment != nil {
+
 				continue
 			}
 			tb.handleMessage(update.Message)
 		case update.CallbackQuery != nil:
 			tb.handleCallbackQuery(update.CallbackQuery)
+		case update.PreCheckoutQuery != nil:
+			tb.handlePreCheckoutQuery(update.PreCheckoutQuery)
+		case update.Message != nil && update.Message.SuccessfulPayment != nil:
+			tb.handleSuccessfulPayment(update.Message)
 		default:
 			log.Println("unknown user's message")
 			tb.handleDefaultCommand(update.Message)
 		}
+	}
+}
 
+func (tb *TgBot) handlePreCheckoutQuery(preCheckoutQuery *tgbotapi.PreCheckoutQuery) {
+	preCheckoutConfig := tgbotapi.PreCheckoutConfig{
+		PreCheckoutQueryID: preCheckoutQuery.ID,
+		OK:                 true,
+	}
+	if _, err := tb.Bot.Request(preCheckoutConfig); err != nil {
+		log.Println("Error handling pre-checkout query:", err)
 	}
 }
 

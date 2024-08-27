@@ -4,6 +4,7 @@ import (
 	"fmt"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/kkdai/youtube/v2"
+	"log"
 	"strconv"
 	"strings"
 	youtube_downloader "youtube_downloader/pkg/downloader/youtube"
@@ -51,6 +52,19 @@ func (yh *YoutubeHandler) handleYoutubeLink(message *tgbotapi.Message) (*tgbotap
 func getKeyboardVideoFormats(formats *youtube.FormatList, url *string) (*tgbotapi.InlineKeyboardMarkup, error) {
 	keyboard := tgbotapi.NewInlineKeyboardMarkup()
 
+	// getting the size of audio
+	audioFormats := formats.WithAudioChannels()
+	audioFormats = audioFormats.Select(func(format youtube.Format) bool {
+		return format.QualityLabel == ""
+	})
+	audioFormats.Sort()
+	audioSize, err := getFileSize(audioFormats[0])
+	if err != nil {
+		log.Println(err.Error())
+		audioSize = 0
+	}
+	audioSize = audioSize / (1024 * 1024)
+
 	for _, format := range *formats {
 
 		//ignore a .webm format
@@ -63,6 +77,11 @@ func getKeyboardVideoFormats(formats *youtube.FormatList, url *string) (*tgbotap
 
 		size, err := getFileSize(format)
 		size = size / (1024 * 1024)
+
+		// add size of audio to video format
+		if strings.HasPrefix(format.MimeType, "video") {
+			size = size + audioSize
+		}
 
 		if err != nil {
 			return &keyboard, err

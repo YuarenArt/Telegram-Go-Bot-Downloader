@@ -228,3 +228,30 @@ func (c *Client) UpdateTraffic(ctx context.Context, username string, traffic flo
 	}
 	return nil
 }
+
+func (c *Client) UpdateSubscription(ctx context.Context, user *db.User) error {
+	url := fmt.Sprintf("%s/users/%s", c.baseURL, user.Username)
+
+	body, err := json.Marshal(user)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewBuffer(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+c.token)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to create user: status %d", resp.StatusCode)
+	}
+	return nil
+}

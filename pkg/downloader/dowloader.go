@@ -4,5 +4,5 @@ type VideoInfo interface {
 }
 
 type Downloader interface {
-	GetVideo(videoURL string) (VideoInfo, error)
+	VideoInfo(videoURL string) (VideoInfo, error)
 }

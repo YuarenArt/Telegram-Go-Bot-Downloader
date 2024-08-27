@@ -98,7 +98,8 @@ func main() {
 		log.Fatal(err)
 	}
 
-	tgBot := tg.NewBot(botAPI)
+	tgBot := tg.GetBotInstance(botAPI)
+	tgBot.SetCommands()
 	if err := tgBot.StartBot(); err != nil {
 		log.Fatal(err)
 	}

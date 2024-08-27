@@ -93,7 +93,7 @@ func TestGetVideo(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			video, err := ytd.GetVideo(tc.videoURL)
+			video, err := ytd.VideoInfo(tc.videoURL)
 			if tc.expectedErr {
 				assert.Error(t, err)
 			} else {

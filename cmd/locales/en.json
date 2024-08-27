@@ -1,0 +1,12 @@
+{
+  "startMessage": "🤖 I'm working! 🤖\n\nHello! I can download video from YouTube, just send a link and choose format\n\n📢 Notice! I can download files up to 2Gb\n\n📅 The monthly download limit is 5 GB\n\nIf you want to download more for free, you can sign up for a paid subscription: just enter /pay",
+  "helpMessage": "I can do the following things:\n\n🎬 Download videos from YouTube\n🎧 Download audio from YouTube\nJust send me a link to the video or audio you want to download.",
+  "defaultMessage": "🤔 I don't know this command. 🤔",
+  "fileTooLarge": "Your file too large",
+  "invalidLink": "Your link incorrect. Just send a link",
+  "somethingWentWrong": "Something went wrong",
+  "chooseSubscriptionPlan": "Choose your subscription plan:",
+  "invalidSubscriptionType": "Invalid subscription type. Please choose 'month', 'year', or 'lifetime'.",
+  "thankYouForPayment": "Thank you for your payment! Your access has been granted.",
+  "errorUpdatingSubscription": "Error updating your subscription. Please contact support."
+}

@@ -14,13 +14,16 @@ func (tb *TgBot) handleCallbackQuery(callbackQuery *tgbotapi.CallbackQuery) {
 
 	data := callbackQuery.Data
 	parts := strings.Split(data, ",")
-	URL := parts[0]
+	data = parts[0]
 
 	switch {
-	case isYoutubeLink(URL):
+	case strings.HasPrefix(data, "pay_"):
+		subscriptionType := strings.TrimPrefix(data, "pay_")
+		tb.processPayment(callbackQuery.Message, subscriptionType)
+	case isYoutubeLink(data):
 		tb.handlers[YoutubeHandler].HandleCallbackQuery(callbackQuery, tb.Bot, tb.Client)
 	default:
-		log.Printf("handleCallbackQuery get default case with %s link", URL)
+		log.Printf("handleCallbackQuery get default case with %s link", data)
 		send.SendReplyMessage(tb.Bot, callbackQuery.Message, "Something went wrong")
 	}
 }

@@ -6,7 +6,7 @@ import (
 	youtube_downloader "youtube_downloader/pkg/downloader/youtube"
 )
 
-// handleYoutubeVideo gets all possible formats of the video by a link
+// handleYoutubeVideo gets all possible formats of the video by a link,
 // creates a keyboard and return it
 func (yh *YoutubeHandler) handleYoutubeVideo(message *Message) (*InlineKeyboardMarkup, error) {
 	videoURL := message.Text
