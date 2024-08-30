@@ -30,10 +30,17 @@ docker-compose up
 To evaluate the bot's performance, you can leverage the integrated profiling features. By default, the bot generates a CPU profile (cpu.prof) and a memory profile (mem.prof) upon receiving a SIGINT or SIGTERM signal.
 
 ### Bot Commands
+
+
 /start: Initiate the bot.
+
 /help: Display help information.
+
 /pay: Purchase a subscription.
+
 /status: Check subscription status.
+
+
 System Architecture
 The bot follows the Model-View-Controller (MVC) design pattern. It interacts with the Telegram API through the go-telegram-bot-api library and communicates with the database using a custom client.
 
