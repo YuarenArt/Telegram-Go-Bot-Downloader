@@ -23,8 +23,6 @@ const (
 var durations = [3]string{"month", "year", "forever"}
 var subscriptionStatus = [2]string{"inactive", "active"}
 
-// TODO add payment
-
 // Client is a structure that contains the HTTP client and the base URL of the server.
 type Client struct {
 	httpClient *http.Client
@@ -48,7 +46,8 @@ func NewClient(token string) *Client {
 	}
 
 	tlsConfig := &tls.Config{
-		RootCAs: certPool,
+		RootCAs:            certPool,
+		InsecureSkipVerify: true, // Disable TLS verification
 	}
 
 	client := &http.Client{
@@ -230,6 +229,11 @@ func (c *Client) UpdateTraffic(ctx context.Context, username string, traffic flo
 }
 
 func (c *Client) UpdateSubscription(ctx context.Context, user *db.User) error {
+
+	if user == nil {
+		return fmt.Errorf("user is nil")
+	}
+
 	url := fmt.Sprintf("%s/users/%s", c.baseURL, user.Username)
 
 	body, err := json.Marshal(user)

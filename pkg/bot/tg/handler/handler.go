@@ -18,7 +18,7 @@ var SupportedHandlers = []HandlerType{
 
 type Handler interface {
 	HandleMessage(message *tgbotapi.Message) (*tgbotapi.InlineKeyboardMarkup, error)
-	HandleCallbackQuery(callbackQuery *tgbotapi.CallbackQuery, bot *tgbotapi.BotAPI, client *database_client.Client)
+	HandleCallbackQuery(callbackQuery *tgbotapi.CallbackQuery, bot *tgbotapi.BotAPI, client *database_client.Client, translations *map[string]string)
 }
 
 func CreateHandler(handlerType HandlerType) Handler {

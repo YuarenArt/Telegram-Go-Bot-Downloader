@@ -1,7 +1,5 @@
-
 ARG GO_VERSION=1.21
 ARG ALPINE_VERSION=latest
-
 
 FROM golang:${GO_VERSION}-alpine as builder
 
@@ -15,7 +13,6 @@ RUN go mod download
 COPY . .
 RUN go build -o /main .
 
-
 FROM alpine:${ALPINE_VERSION}
 
 RUN apk --no-cache add ca-certificates ffmpeg
@@ -25,6 +22,9 @@ WORKDIR /root/
 COPY --from=builder /main .
 COPY config.yaml .
 COPY .env .env
+COPY cmd/locales cmd/locales
+COPY cert.pem /usr/local/share/ca-certificates/tg-database.crt
+RUN update-ca-certificates
 
 EXPOSE 8080/tcp
 

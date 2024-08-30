@@ -28,9 +28,6 @@ func (tb *TgBot) handleUpdates(updates tgbotapi.UpdatesChannel) {
 			if update.Message.IsCommand() {
 				tb.handleCommand(update.Message)
 				continue
-			} else if update.Message.SuccessfulPayment != nil {
-
-				continue
 			}
 			tb.handleMessage(update.Message)
 		case update.CallbackQuery != nil:
@@ -41,7 +38,7 @@ func (tb *TgBot) handleUpdates(updates tgbotapi.UpdatesChannel) {
 			tb.handleSuccessfulPayment(update.Message)
 		default:
 			log.Println("unknown user's message")
-			tb.handleDefaultCommand(update.Message)
+			tb.handleDefaultCommand(update.Message, update.Message.From.LanguageCode)
 		}
 	}
 }
@@ -66,27 +63,35 @@ func (tb *TgBot) handleMessage(message *tgbotapi.Message) {
 	switch {
 	case isYoutubeLink(message.Text):
 		keyboard, err := tb.handlers[handler.YoutubeHandler].HandleMessage(message)
+		lang := message.From.LanguageCode
 		if err != nil {
 			log.Print(err)
 			errMsg := err.Error()
 			if errMsg == "Request Entity Too Large" {
-				send.SendReplyMessage(tb.Bot, message, "Your file too large")
+				fileTooLarge := tb.translations[lang]["fileTooLarge"]
+				send.SendReplyMessage(tb.Bot, message, &fileTooLarge)
 			} else if errMsg == "extractVideoID failed: invalid characters in video id" {
-				send.SendReplyMessage(tb.Bot, message, "Your link incorrect. Just send a link")
+				invalidLink := tb.translations[lang]["invalidLink"]
+				send.SendReplyMessage(tb.Bot, message, &invalidLink)
 			} else {
-				send.SendReplyMessage(tb.Bot, message, "Something went wrong")
+				somethingWentWrong := tb.translations[lang]["somethingWentWrong"]
+				send.SendReplyMessage(tb.Bot, message, &somethingWentWrong)
 			}
+			return
 		}
 
 		if strings.HasPrefix(message.Text, "https://www.youtube.com/live/") {
 			videoURL := youtube.FormatYouTubeURLOnStream(message.Text)
-			send.SendKeyboardMessageReplyWithFormattedLink(tb.Bot, message, keyboard, videoURL)
+			translations := tb.translations[lang]
+			send.SendKeyboardMessageReplyWithFormattedLink(tb.Bot, message, keyboard, videoURL, translations)
 		} else {
-			send.SendKeyboardMessageReply(tb.Bot, message, keyboard)
+			translations := tb.translations[lang]
+			send.SendKeyboardMessageReply(tb.Bot, message, keyboard, &translations)
 		}
+
 	default:
-		tb.handleDefaultCommand(message)
-		tb.handleHelpCommand(message)
+		tb.handleDefaultCommand(message, message.From.LanguageCode)
+		tb.handleHelpCommand(message, message.From.LanguageCode)
 	}
 }
 

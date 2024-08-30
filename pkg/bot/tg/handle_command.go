@@ -2,6 +2,7 @@ package tg
 
 import (
 	"context"
+	"fmt"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/joho/godotenv"
 	"log"
@@ -10,39 +11,33 @@ import (
 	"youtube_downloader/pkg/bot/tg/send"
 )
 
+// TODO првоекра статуса перед оплатой
+
 const (
-	commandStart = "start"
-	commandHelp  = "help"
-	commandPay   = "pay"
+	commandStart  = "start"
+	commandHelp   = "help"
+	commandPay    = "pay"
+	commandStatus = "status"
 
 	payMonth    = "pay_month"
 	payYear     = "pay_year"
 	payLifetime = "pay_lifetime"
-
-	startMessage = "🤖 I'm working! 🤖\n\n" +
-		"Hello! I can download video from YouTube, just send a link and choose format\n\n" +
-		"📢 Notice! I can download files up to 2Gb\n\n" +
-		"📅 The monthly download limit is 5 GB\n\n" +
-		"If you want to download more for free, you can sign up for a paid subscription: just enter /pay"
-
-	helpMessage = "I can do the following things:\n\n" +
-		"🎬 Download videos from YouTube\n" +
-		"🎧 Download audio from YouTube\n" +
-		"Just send me a link to the video or audio you want to download."
-	defaultMessage = "🤔 I don't know this command. 🤔"
 )
 
 // handleCommand handles supported commands
 func (tb *TgBot) handleCommand(message *tgbotapi.Message) {
+	lang := message.From.LanguageCode
 	switch message.Command() {
 	case commandStart:
-		tb.handleStartCommand(message)
+		tb.handleStartCommand(message, lang)
 	case commandHelp:
-		tb.handleHelpCommand(message)
+		tb.handleHelpCommand(message, lang)
 	case commandPay:
 		tb.handlePayCommand(message)
+	case commandStatus:
+		tb.UserStatus(message, lang)
 	default:
-		tb.handleDefaultCommand(message)
+		tb.handleDefaultCommand(message, lang)
 	}
 }
 
@@ -60,14 +55,15 @@ func (tb *TgBot) handlePayCommand(message *tgbotapi.Message) {
 
 // sendPayOptions sends buttons with subscription options to the user
 func (tb *TgBot) sendPayOptions(message *tgbotapi.Message) {
+	lang := message.From.LanguageCode
 	buttons := []tgbotapi.InlineKeyboardButton{
-		tgbotapi.NewInlineKeyboardButtonData("Monthly - 100 Rub", payMonth),
-		tgbotapi.NewInlineKeyboardButtonData("Yearly - 1000", payYear),
-		tgbotapi.NewInlineKeyboardButtonData("Lifetime - 2000", payLifetime),
+		tgbotapi.NewInlineKeyboardButtonData(tb.translations[lang]["monthlyButton"], payMonth),
+		tgbotapi.NewInlineKeyboardButtonData(tb.translations[lang]["yearlyButton"], payYear),
+		tgbotapi.NewInlineKeyboardButtonData(tb.translations[lang]["lifetimeButton"], payLifetime),
 	}
 
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(buttons)
-	msg := tgbotapi.NewMessage(message.Chat.ID, "Choose your subscription plan:")
+	msg := tgbotapi.NewMessage(message.Chat.ID, tb.translations[lang]["chooseSubscriptionPlan"])
 	msg.ReplyMarkup = keyboard
 
 	if _, err := tb.Bot.Send(msg); err != nil {
@@ -77,31 +73,32 @@ func (tb *TgBot) sendPayOptions(message *tgbotapi.Message) {
 
 // processPayment processes the payment based on the selected subscription type
 func (tb *TgBot) processPayment(message *tgbotapi.Message, subscriptionType string) {
+	lang := "en"
 	subscriptions := map[string]struct {
 		Title       string
 		Description string
 		Amount      int
 	}{
 		"month": {
-			Title:       "Monthly Subscription",
-			Description: "Access to downloading without traffic restrictions for one month",
-			Amount:      10000, // $2.00
+			Title:       tb.translations[lang]["monthlyTitle"],
+			Description: tb.translations[lang]["monthlyDescription"],
+			Amount:      10000,
 		},
 		"year": {
-			Title:       "Yearly Subscription",
-			Description: "Access to downloading without traffic restrictions for one year",
-			Amount:      100000, // $20.00
+			Title:       tb.translations[lang]["yearlyTitle"],
+			Description: tb.translations[lang]["yearlyDescription"],
+			Amount:      100000,
 		},
 		"lifetime": {
-			Title:       "Lifetime Subscription",
-			Description: "Lifetime access to downloading without traffic restrictions",
-			Amount:      200000, // $100.00
+			Title:       tb.translations[lang]["lifetimeTitle"],
+			Description: tb.translations[lang]["lifetimeDescription"],
+			Amount:      200000,
 		},
 	}
 
 	subscription, exists := subscriptions[subscriptionType]
 	if !exists {
-		send.SendMessage(tb.Bot, message, "Invalid subscription type. Please choose 'month', 'year', or 'lifetime'.")
+		send.SendMessage(tb.Bot, message, tb.translations[lang]["invalidSubscriptionType"])
 		return
 	}
 
@@ -144,46 +141,69 @@ func (tb *TgBot) handleSuccessfulPayment(message *tgbotapi.Message) {
 	defer cancel()
 
 	user, err := tb.Client.GetUser(ctx, message.From.UserName)
-	if err != nil {
-		log.Printf("Cna't get user: %s, error: %s ", message.From.UserName, err.Error())
+	if err != nil || user == nil {
+		log.Printf("Can't get user: %s, error: %s ", message.From.UserName, err.Error())
 	}
 
+	lang := message.From.LanguageCode
 	payload := message.SuccessfulPayment.InvoicePayload
 	user.Subscription.SubscriptionStatus = "active"
-	now := time.Now()
+
 	switch payload {
 	case "month":
-		user.Subscription.Duration = "1 month"
-		user.Subscription.EndSubscription = now.AddDate(0, 1, 0)
+		user.Subscription.Duration = "month"
+		user.Subscription.EndSubscription.AddDate(0, 1, 0)
 	case "year":
-		user.Subscription.Duration = "1 year"
-		user.Subscription.EndSubscription = now.AddDate(1, 0, 0)
+		user.Subscription.Duration = "year"
+		user.Subscription.EndSubscription.AddDate(1, 0, 0)
 	case "lifetime":
-		user.Subscription.Duration = "Lifetime"
-		user.Subscription.EndSubscription = time.Time{} // Represents "no end date"
+		user.Subscription.Duration = "lifetime"
+		user.Subscription.EndSubscription.AddDate(900, 0, 0) // Represents "no end date"
 	}
 
 	err = tb.Client.UpdateSubscription(ctx, user)
 	if err != nil {
 		log.Printf("Error updating user subscription: %s", err.Error())
-		send.SendMessage(tb.Bot, message, "Error updating your subscription. Please contact support.")
+		send.SendMessage(tb.Bot, message, tb.translations[lang]["errorUpdatingSubscription"])
 		return
 	}
 
-	send.SendMessage(tb.Bot, message, "Thank you for your payment! Your access has been granted.")
+	send.SendMessage(tb.Bot, message, tb.translations[lang]["thankYouForPayment"])
 }
 
 // handleStartCommand sends a message with startMessage text
-func (tb *TgBot) handleStartCommand(message *tgbotapi.Message) error {
-	return send.SendMessage(tb.Bot, message, startMessage)
+func (tb *TgBot) handleStartCommand(message *tgbotapi.Message, lang string) error {
+	return send.SendMessage(tb.Bot, message, tb.translations[lang]["startMessage"])
 }
 
-// handleStartCommand sends a message with helpMessage text
-func (tb *TgBot) handleHelpCommand(message *tgbotapi.Message) error {
-	return send.SendMessage(tb.Bot, message, helpMessage)
+// handleHelpCommand sends a message with helpMessage text
+func (tb *TgBot) handleHelpCommand(message *tgbotapi.Message, lang string) error {
+	return send.SendMessage(tb.Bot, message, tb.translations[lang]["helpMessage"])
 }
 
-// handleStartCommand sends a message with defaultMessage text
-func (tb *TgBot) handleDefaultCommand(message *tgbotapi.Message) error {
-	return send.SendMessage(tb.Bot, message, defaultMessage)
+// handleDefaultCommand sends a message with defaultMessage text
+func (tb *TgBot) handleDefaultCommand(message *tgbotapi.Message, lang string) error {
+	return send.SendMessage(tb.Bot, message, tb.translations[lang]["defaultMessage"])
+}
+
+// UserStatus send user's subscription status and subscription expiration date if active
+func (tb *TgBot) UserStatus(message *tgbotapi.Message, lang string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+
+	user, err := tb.Client.GetUser(ctx, message.From.UserName)
+	if err != nil || user == nil {
+		log.Println("can't get user: " + message.From.UserName)
+		return send.SendMessage(tb.Bot, message, tb.translations[lang]["errorFindStatus"])
+	}
+
+	statusText := tb.translations[lang]["userStatus"]
+	expireText := tb.translations[lang]["expireSubscription"]
+
+	text := fmt.Sprintf("%s %s.", statusText, user.Subscription.SubscriptionStatus)
+	if user.Subscription.SubscriptionStatus == "active" {
+		text += fmt.Sprintf(" %s %s", expireText, user.Subscription.EndSubscription.Format("2006-01-02"))
+	}
+
+	return send.SendMessage(tb.Bot, message, text)
 }

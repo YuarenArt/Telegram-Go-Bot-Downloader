@@ -58,9 +58,9 @@ func newBot(bot *tgbotapi.BotAPI) *TgBot {
 	}
 }
 
-// GetBotInstance returns the singleton instance of TgBot.
+// BotInstance returns the singleton instance of TgBot.
 // If the instance does not exist, it initializes it.
-func GetBotInstance(bot *tgbotapi.BotAPI) *TgBot {
+func BotInstance(bot *tgbotapi.BotAPI) *TgBot {
 	once.Do(func() {
 		instance = newBot(bot)
 	})
@@ -171,6 +171,7 @@ func (tb *TgBot) SetCommands() {
 		{Command: commandStart, Description: "Start the bot"},
 		{Command: commandHelp, Description: "Get help"},
 		{Command: commandPay, Description: "Subscribe to premium features"},
+		{Command: commandStatus, Description: "Send user premium subscription status"},
 	}
 
 	config := tgbotapi.NewSetMyCommands(commands...)

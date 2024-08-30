@@ -11,7 +11,8 @@ import (
 	youtube_downloader "youtube_downloader/pkg/downloader/youtube"
 )
 
-func (yh *YoutubeHandler) processPlaylistAudio(bot *tgbotapi.BotAPI, callbackQuery *tgbotapi.CallbackQuery, playlist *youtube.Playlist, client *database_client.Client) {
+func (yh *YoutubeHandler) processPlaylistAudio(bot *tgbotapi.BotAPI, callbackQuery *tgbotapi.CallbackQuery,
+	playlist *youtube.Playlist, client *database_client.Client, translations *map[string]string) {
 	downloader := youtube_downloader.NewYouTubeDownloader()
 	for _, playlistEntry := range playlist.Videos {
 		video, err := downloader.GetVideoFromPlaylistEntry(playlistEntry)
@@ -24,8 +25,9 @@ func (yh *YoutubeHandler) processPlaylistAudio(bot *tgbotapi.BotAPI, callbackQue
 		formats.Sort()
 		formats, err = youtube_downloader.WithFormats(&video.Formats, youtube_downloader.AUDIO_PREFIX)
 
-		if !checkTraffic(client, callbackQuery, bot, &formats[0]) {
-			_, err := send.SendReplyMessage(bot, callbackQuery.Message, send.TrafficLimit)
+		if !checkTraffic(client, callbackQuery, &formats[0]) {
+			trafficLimit := (*translations)["trafficLimit"]
+			_, err := send.SendReplyMessage(bot, callbackQuery.Message, &trafficLimit)
 			if err != nil {
 				log.Printf("can't send reply message: %s", err.Error())
 			}
@@ -33,7 +35,8 @@ func (yh *YoutubeHandler) processPlaylistAudio(bot *tgbotapi.BotAPI, callbackQue
 		}
 
 		// start downloading
-		resp, err := send.SendReplyMessage(bot, callbackQuery.Message, send.DownloadingNotification)
+		downloadingNotification := (*translations)["downloadingNotification"]
+		resp, err := send.SendReplyMessage(bot, callbackQuery.Message, &downloadingNotification)
 		if err != nil {
 			log.Printf("can't send reply message: %s", err.Error())
 		}
@@ -50,11 +53,12 @@ func (yh *YoutubeHandler) processPlaylistAudio(bot *tgbotapi.BotAPI, callbackQue
 		}
 
 		// start sending
-		go sendAnswer(bot, callbackQuery, &resp, &path, client, &fileSize)
+		go sendAnswer(bot, callbackQuery, &resp, &path, client, &fileSize, translations)
 	}
 }
 
-func (yh *YoutubeHandler) processPlaylistVideo(bot *tgbotapi.BotAPI, callbackQuery *tgbotapi.CallbackQuery, playlist *youtube.Playlist, client *database_client.Client) {
+func (yh *YoutubeHandler) processPlaylistVideo(bot *tgbotapi.BotAPI, callbackQuery *tgbotapi.CallbackQuery,
+	playlist *youtube.Playlist, client *database_client.Client, translations *map[string]string) {
 	downloader := youtube_downloader.NewYouTubeDownloader()
 	for _, playlistEntry := range playlist.Videos {
 		video, err := downloader.GetVideoFromPlaylistEntry(playlistEntry)
@@ -67,8 +71,9 @@ func (yh *YoutubeHandler) processPlaylistVideo(bot *tgbotapi.BotAPI, callbackQue
 		formats.Sort()
 		formats, err = youtube_downloader.WithFormats(&video.Formats, youtube_downloader.VIDEO_PREFIX)
 
-		if !checkTraffic(client, callbackQuery, bot, &video.Formats[len(formats)-1]) {
-			_, err := send.SendReplyMessage(bot, callbackQuery.Message, send.TrafficLimit)
+		if !checkTraffic(client, callbackQuery, &video.Formats[len(formats)-1]) {
+			trafficLimit := (*translations)["trafficLimit"]
+			_, err := send.SendReplyMessage(bot, callbackQuery.Message, &trafficLimit)
 			if err != nil {
 				log.Printf("can't send reply message: %s", err.Error())
 			}
@@ -76,7 +81,8 @@ func (yh *YoutubeHandler) processPlaylistVideo(bot *tgbotapi.BotAPI, callbackQue
 		}
 
 		// start downloading
-		resp, err := send.SendReplyMessage(bot, callbackQuery.Message, send.DownloadingNotification)
+		downloadingNotification := (*translations)["downloadingNotification"]
+		resp, err := send.SendReplyMessage(bot, callbackQuery.Message, &downloadingNotification)
 		if err != nil {
 			log.Printf("can't send reply message: %s", err.Error())
 		}
@@ -94,11 +100,12 @@ func (yh *YoutubeHandler) processPlaylistVideo(bot *tgbotapi.BotAPI, callbackQue
 		}
 
 		// start sending
-		go sendAnswer(bot, callbackQuery, &resp, &path, client, &fileSize)
+		go sendAnswer(bot, callbackQuery, &resp, &path, client, &fileSize, translations)
 	}
 }
 
-func (yh *YoutubeHandler) processSingleVideo(bot *tgbotapi.BotAPI, callbackQuery *tgbotapi.CallbackQuery, playlist *youtube.Playlist) {
+func (yh *YoutubeHandler) processSingleVideo(bot *tgbotapi.BotAPI, callbackQuery *tgbotapi.CallbackQuery,
+	playlist *youtube.Playlist, translations *map[string]string) {
 	downloader := youtube_downloader.NewYouTubeDownloader()
 
 	data := callbackQuery.Data
@@ -122,9 +129,10 @@ func (yh *YoutubeHandler) processSingleVideo(bot *tgbotapi.BotAPI, callbackQuery
 	keyboard, err := getKeyboardVideoFormats(&formats, &videoURL)
 	if err != nil {
 		log.Println("Error after getKeyboardVideoFormats in processSingleVideo: " + err.Error())
-		send.SendReplyMessage(bot, callbackQuery.Message, "Something went wrong. Sorry!")
+		somethingWentWrong := (*translations)["somethingWentWrong"]
+		send.SendReplyMessage(bot, callbackQuery.Message, &somethingWentWrong)
 		return
 	}
 
-	send.SendKeyboardMessage(bot, callbackQuery.Message, keyboard)
+	send.SendKeyboardMessage(bot, callbackQuery.Message, keyboard, translations)
 }
