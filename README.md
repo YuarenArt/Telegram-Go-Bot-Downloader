@@ -25,12 +25,11 @@ This project houses the source code for a Telegram bot developed in Go. The bot 
 
 ### Running the Bot
 
-```bash
 docker-compose up
-Testing
+
 To evaluate the bot's performance, you can leverage the integrated profiling features. By default, the bot generates a CPU profile (cpu.prof) and a memory profile (mem.prof) upon receiving a SIGINT or SIGTERM signal.
 
-Bot Commands
+### Bot Commands
 /start: Initiate the bot.
 /help: Display help information.
 /pay: Purchase a subscription.
@@ -38,15 +37,8 @@ Bot Commands
 System Architecture
 The bot follows the Model-View-Controller (MVC) design pattern. It interacts with the Telegram API through the go-telegram-bot-api library and communicates with the database using a custom client.
 
-Contribution Guidelines
+### Contribution Guidelines
 We welcome contributions! To contribute:
 
-Fork the repository.
-Create a new branch for your feature or bug fix.
-Commit your changes.
-Push to your fork and submit a pull request.
-Licensing Information
-This project is licensed under the MIT License. Refer to the LICENSE file for more details.
-
-Special Thanks
+### Special Thanks
 Gratitude goes out to the contributors of the libraries utilized in this project, including go-telegram-bot-api, kkdai/youtube, and joho/godotenv.
