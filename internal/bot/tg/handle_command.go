@@ -8,10 +8,8 @@ import (
 	"log"
 	"os"
 	"time"
-	"youtube_downloader/pkg/bot/tg/send"
+	"youtube_downloader/internal/bot/tg/send"
 )
-
-// TODO првоекра статуса перед оплатой
 
 const (
 	commandStart  = "start"
@@ -115,6 +113,9 @@ func (tb *TgBot) processPayment(message *tgbotapi.Message, subscriptionType stri
 		log.Fatalf("Error loading .env file: %v", err)
 	}
 	providerToken := os.Getenv("PROVIDER_TOKEN")
+	if providerToken == "" {
+		log.Fatal("Can't get provider token")
+	}
 
 	invoice := tgbotapi.NewInvoice(
 		message.Chat.ID,
@@ -149,16 +150,14 @@ func (tb *TgBot) handleSuccessfulPayment(message *tgbotapi.Message) {
 	payload := message.SuccessfulPayment.InvoicePayload
 	user.Subscription.SubscriptionStatus = "active"
 
-	switch payload {
-	case "month":
-		user.Subscription.Duration = "month"
-		user.Subscription.EndSubscription.AddDate(0, 1, 0)
-	case "year":
-		user.Subscription.Duration = "year"
-		user.Subscription.EndSubscription.AddDate(1, 0, 0)
-	case "lifetime":
-		user.Subscription.Duration = "lifetime"
-		user.Subscription.EndSubscription.AddDate(900, 0, 0) // Represents "no end date"
+	now := time.Now() // Get current time
+
+	if user.Subscription.EndSubscription.Before(now) {
+		// If subscription has already ended, add duration to current time
+		user.Subscription.EndSubscription = addDurationToTime(now, payload)
+	} else {
+		// If subscription is still active, add duration to the end of the subscription
+		user.Subscription.EndSubscription = addDurationToTime(user.Subscription.EndSubscription, payload)
 	}
 
 	err = tb.Client.UpdateSubscription(ctx, user)
@@ -169,6 +168,18 @@ func (tb *TgBot) handleSuccessfulPayment(message *tgbotapi.Message) {
 	}
 
 	send.SendMessage(tb.Bot, message, tb.translations[lang]["thankYouForPayment"])
+}
+
+func addDurationToTime(t time.Time, duration string) time.Time {
+	switch duration {
+	case "month":
+		return t.AddDate(0, 1, 0)
+	case "year":
+		return t.AddDate(1, 0, 0)
+	case "lifetime":
+		return t.AddDate(900, 0, 0)
+	}
+	return t
 }
 
 // handleStartCommand sends a message with startMessage text

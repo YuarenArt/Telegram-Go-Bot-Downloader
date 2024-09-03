@@ -10,9 +10,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"youtube_downloader/pkg/bot/tg/send"
-	database_client "youtube_downloader/pkg/database-client"
-	youtube_downloader "youtube_downloader/pkg/downloader/youtube"
+	"youtube_downloader/internal/bot/tg/send"
+	database_client "youtube_downloader/internal/database-client"
+	youtube_downloader "youtube_downloader/internal/downloader/youtube"
 )
 
 // TODO rework a way to get data for downloading

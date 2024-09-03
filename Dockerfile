@@ -20,7 +20,6 @@ RUN apk --no-cache add ca-certificates ffmpeg
 WORKDIR /root/
 
 COPY --from=builder /main .
-COPY config.yaml .
 COPY .env .env
 COPY cmd/locales cmd/locales
 COPY cert.pem /usr/local/share/ca-certificates/tg-database.crt

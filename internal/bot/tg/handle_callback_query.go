@@ -4,8 +4,8 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"log"
 	"strings"
-	. "youtube_downloader/pkg/bot/tg/handler"
-	"youtube_downloader/pkg/bot/tg/send"
+	. "youtube_downloader/internal/bot/tg/handler"
+	"youtube_downloader/internal/bot/tg/send"
 )
 
 // handleCallbackQuery gets url from Bot's message with a replying link,

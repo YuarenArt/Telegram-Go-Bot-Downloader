@@ -5,8 +5,8 @@ services:
     image: aiogram/telegram-bot-api:latest
     container_name: telegram-bot-api-local
     environment:
-      TELEGRAM_API_ID: "your api id"
-      TELEGRAM_API_HASH: "your hash"
+      TELEGRAM_API_ID:
+      TELEGRAM_API_HASH:
     volumes:
       - telegram-bot-api-data:/var/lib/telegram-bot-api
     ports:
@@ -15,9 +15,9 @@ services:
   db:
     image: postgres:latest
     environment:
-      POSTGRES_USER: your user
-      POSTGRES_PASSWORD: your password
-      POSTGRES_DB: your db
+      POSTGRES_USER:
+      POSTGRES_PASSWORD:
+      POSTGRES_DB:
     ports:
       - "5432:5432"
 
@@ -28,12 +28,23 @@ services:
       - db
     ports:
       - "8082:8082"
+    environment:
+      BOT_TOKEN: 6979900763:AAFH_B1QpdIJXA87LXTRqwvhxgji8LAm9g4
+      DB_USER: postgres
+      DB_PASSWORD: 992f9a5a9fb44148a1dd7241db00f7ec
+      DB_NAME: users
+      DB_SSLMODE: disable
+      HOST: db
+      PORT: 5432
 
   telegram-bot:
     image: telegram-bot:latest
     container_name: telegram-bot
     environment:
-      - DOWNLOAD_PATH=/download
+      - HOST=telegram-bot-api:8081
+      - PROVIDER_TOKEN=
+      - DB_URL=https://tg-database:8082
+      - TELEGRAM_BOT_TOKEN=
     volumes:
       - .:/usr/src/telegram-bot
     depends_on:

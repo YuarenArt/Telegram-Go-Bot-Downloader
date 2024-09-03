@@ -6,7 +6,7 @@ import (
 	"log"
 	"net/url"
 	"strings"
-	youtube_downloader "youtube_downloader/pkg/downloader/youtube"
+	youtube_downloader "youtube_downloader/internal/downloader/youtube"
 )
 
 // handleYoutubeStream transforms live/ link into common video link

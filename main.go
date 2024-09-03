@@ -10,7 +10,7 @@ import (
 	"runtime"
 	"runtime/pprof"
 	"syscall"
-	"youtube_downloader/pkg/bot/tg"
+	"youtube_downloader/internal/bot/tg"
 )
 
 // startProfiling initializes CPU and memory profiling and sets up signal handling for graceful shutdown.

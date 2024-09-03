@@ -5,7 +5,7 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/kkdai/youtube/v2"
 	"log"
-	youtube_downloader "youtube_downloader/pkg/downloader/youtube"
+	youtube_downloader "youtube_downloader/internal/downloader/youtube"
 )
 
 const (

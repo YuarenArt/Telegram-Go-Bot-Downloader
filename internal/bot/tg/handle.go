@@ -7,10 +7,10 @@ import (
 	"log"
 	"strings"
 	"time"
-	"youtube_downloader/pkg/bot/tg/handler"
-	"youtube_downloader/pkg/bot/tg/handler/youtube"
-	"youtube_downloader/pkg/bot/tg/send"
-	database_client "youtube_downloader/pkg/database-client"
+	"youtube_downloader/internal/bot/tg/handler"
+	"youtube_downloader/internal/bot/tg/handler/youtube"
+	"youtube_downloader/internal/bot/tg/send"
+	database_client "youtube_downloader/internal/database-client"
 )
 
 // handleUpdates gets updates from telegramAPI and handles it

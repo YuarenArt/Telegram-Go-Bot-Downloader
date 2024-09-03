@@ -7,7 +7,7 @@ import (
 	"log"
 	"strconv"
 	"strings"
-	youtube_downloader "youtube_downloader/pkg/downloader/youtube"
+	youtube_downloader "youtube_downloader/internal/downloader/youtube"
 )
 
 const (

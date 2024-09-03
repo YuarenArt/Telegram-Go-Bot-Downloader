@@ -8,7 +8,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
-	youtube_downloader "youtube_downloader/pkg/downloader/youtube"
+	youtube_downloader "youtube_downloader/internal/downloader/youtube"
 )
 
 // sendFile send file according its type

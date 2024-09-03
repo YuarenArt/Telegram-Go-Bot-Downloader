@@ -8,9 +8,9 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
-	"youtube_downloader/pkg/bot/tg/handler"
-	_ "youtube_downloader/pkg/database-client"
-	database_client "youtube_downloader/pkg/database-client"
+	"youtube_downloader/internal/bot/tg/handler"
+	_ "youtube_downloader/internal/database-client"
+	database_client "youtube_downloader/internal/database-client"
 )
 
 // TgBot uses telegram-Bot-api to maintain tg Bot
