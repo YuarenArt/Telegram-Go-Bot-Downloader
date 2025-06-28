@@ -7,13 +7,14 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"fmt"
-	"github.com/joho/godotenv"
 	"log"
 	"os"
 	"time"
 
-	"github.com/YuarenArt/tg-users-database/pkg/db"
+	"github.com/joho/godotenv"
+
 	"net/http"
+	"youtube_downloader/pkg/database/models"
 )
 
 const (
@@ -71,12 +72,12 @@ func NewClient(token string) *Client {
 }
 
 // NewUser initializes and returns a new User.
-func NewUser(username string, ChatID int64) *db.User {
-	return &db.User{
+func NewUser(username string, ChatID int64) *models.User {
+	return &models.User{
 		Username: username,
 		Traffic:  0,
 		ChatID:   ChatID,
-		Subscription: db.Subscription{
+		Subscription: models.Subscription{
 			StartSubscription:  time.Now(),
 			EndSubscription:    time.Now(),
 			SubscriptionStatus: subscriptionStatus[0],
@@ -86,7 +87,7 @@ func NewUser(username string, ChatID int64) *db.User {
 }
 
 // CreateUser sends a request to create a new user.
-func (c *Client) CreateUser(ctx context.Context, newUser *db.User) error {
+func (c *Client) CreateUser(ctx context.Context, newUser *models.User) error {
 	url := fmt.Sprintf("%s/users", c.baseURL)
 	body, err := json.Marshal(newUser)
 	if err != nil {
@@ -114,7 +115,7 @@ func (c *Client) CreateUser(ctx context.Context, newUser *db.User) error {
 }
 
 // GetUser sends a request to retrieve a user by username.
-func (c *Client) GetUser(ctx context.Context, username string) (*db.User, error) {
+func (c *Client) GetUser(ctx context.Context, username string) (*models.User, error) {
 	url := fmt.Sprintf("%s/users/%s", c.baseURL, username)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -134,7 +135,7 @@ func (c *Client) GetUser(ctx context.Context, username string) (*db.User, error)
 		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
 
-	var retrievedUser db.User
+	var retrievedUser models.User
 	if err := json.NewDecoder(resp.Body).Decode(&retrievedUser); err != nil {
 		return nil, fmt.Errorf("failed to decode response body: %w", err)
 	}
@@ -199,6 +200,7 @@ func (c *Client) IsUserExist(ctx context.Context, username string) (bool, error)
 	return false, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 }
 
+// UpdateTraffic sends a request to update a user's traffic.
 func (c *Client) UpdateTraffic(ctx context.Context, username string, traffic float64) error {
 
 	url := fmt.Sprintf("%s/users/%s/traffic", c.baseURL, username)
@@ -228,7 +230,7 @@ func (c *Client) UpdateTraffic(ctx context.Context, username string, traffic flo
 	return nil
 }
 
-func (c *Client) UpdateSubscription(ctx context.Context, user *db.User) error {
+func (c *Client) UpdateSubscription(ctx context.Context, user *models.User) error {
 
 	if user == nil {
 		return fmt.Errorf("user is nil")

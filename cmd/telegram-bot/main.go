@@ -2,8 +2,6 @@ package main
 
 import (
 	"fmt"
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
-	"github.com/joho/godotenv"
 	"log"
 	"os"
 	"os/signal"
@@ -11,6 +9,9 @@ import (
 	"runtime/pprof"
 	"syscall"
 	"youtube_downloader/internal/bot/tg"
+
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"github.com/joho/godotenv"
 )
 
 // startProfiling initializes CPU and memory profiling and sets up signal handling for graceful shutdown.
@@ -67,7 +68,6 @@ func startProfiling(cpuProfile, memProfile string) (cleanup func(), err error) {
 }
 
 func main() {
-
 	cleanup, err := startProfiling("cpu.prof", "mem.prof")
 	if err != nil {
 		log.Fatal("Error starting profiling: ", err)

@@ -11,7 +11,8 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-RUN go build -o /main .
+RUN go build -o /telegram-bot cmd/telegram-bot/main.go
+RUN go build -o /user-database cmd/user-database/main.go
 
 FROM alpine:${ALPINE_VERSION}
 
@@ -19,12 +20,23 @@ RUN apk --no-cache add ca-certificates ffmpeg
 
 WORKDIR /root/
 
-COPY --from=builder /main .
-COPY .env .env
+COPY --from=builder /telegram-bot .
+COPY --from=builder /user-database .
 COPY cmd/locales cmd/locales
-COPY cert.pem /usr/local/share/ca-certificates/tg-database.crt
+
+# Create dummy certificates for development
+RUN echo "-----BEGIN CERTIFICATE-----" > /usr/local/share/ca-certificates/tg-database.crt && \
+    echo "-----END CERTIFICATE-----" >> /usr/local/share/ca-certificates/tg-database.crt && \
+    echo "-----BEGIN PRIVATE KEY-----" > key.pem && \
+    echo "-----END PRIVATE KEY-----" >> key.pem
+
 RUN update-ca-certificates
 
-EXPOSE 8080/tcp
+# Copy env.example as .env (environment variables will be overridden by docker-compose)
+COPY env.example .env
 
-CMD ["./main"]
+EXPOSE 8080/tcp
+EXPOSE 8082/tcp
+
+# Default command runs telegram bot
+CMD ["./telegram-bot"]

@@ -2,9 +2,6 @@ package youtube
 
 import (
 	"context"
-	"github.com/YuarenArt/tg-users-database/pkg/db"
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
-	"github.com/kkdai/youtube/v2"
 	"log"
 	"os"
 	"strconv"
@@ -13,6 +10,10 @@ import (
 	"youtube_downloader/internal/bot/tg/send"
 	database_client "youtube_downloader/internal/database-client"
 	youtube_downloader "youtube_downloader/internal/downloader/youtube"
+	"youtube_downloader/pkg/database/models"
+
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"github.com/kkdai/youtube/v2"
 )
 
 // TODO rework a way to get data for downloading
@@ -197,7 +198,7 @@ func updateUserTraffic(callbackQuery *tgbotapi.CallbackQuery, client *database_c
 	log.Println("Successful updating")
 }
 
-func getOrCreateUser(ctx context.Context, client *database_client.Client, callbackQuery *tgbotapi.CallbackQuery) (*db.User, error) {
+func getOrCreateUser(ctx context.Context, client *database_client.Client, callbackQuery *tgbotapi.CallbackQuery) (*models.User, error) {
 	user, err := client.GetUser(ctx, callbackQuery.From.UserName)
 	if err != nil || user == nil {
 		chatID := callbackQuery.Message.Chat.ID

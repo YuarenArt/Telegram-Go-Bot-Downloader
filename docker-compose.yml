@@ -5,8 +5,8 @@ services:
     image: aiogram/telegram-bot-api:latest
     container_name: telegram-bot-api-local
     environment:
-      TELEGRAM_API_ID:
-      TELEGRAM_API_HASH:
+      TELEGRAM_API_ID: ${TELEGRAM_API_ID:-}
+      TELEGRAM_API_HASH: ${TELEGRAM_API_HASH:-}
     volumes:
       - telegram-bot-api-data:/var/lib/telegram-bot-api
     ports:
@@ -15,44 +15,47 @@ services:
   db:
     image: postgres:latest
     environment:
-      POSTGRES_USER:
-      POSTGRES_PASSWORD:
-      POSTGRES_DB:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-992f9a5a9fb44148a1dd7241db00f7ec}
+      POSTGRES_DB: ${DB_NAME:-users}
     ports:
       - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
 
-  tg-database:
-    image: tg-users-database:latest
-    container_name: tg-database
+  user-database:
+    build: .
+    container_name: user-database
     depends_on:
       - db
     ports:
       - "8082:8082"
     environment:
-      BOT_TOKEN: 6979900763:AAFH_B1QpdIJXA87LXTRqwvhxgji8LAm9g4
-      DB_USER: postgres
-      DB_PASSWORD: 992f9a5a9fb44148a1dd7241db00f7ec
-      DB_NAME: users
-      DB_SSLMODE: disable
-      HOST: db
-      PORT: 5432
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-992f9a5a9fb44148a1dd7241db00f7ec}
+      - DB_NAME=${DB_NAME:-users}
+      - DB_SSLMODE=${DB_SSLMODE:-disable}
+      - HOST=db
+      - PORT=5432
+    command: ["./user-database"]
 
   telegram-bot:
-    image: telegram-bot:latest
+    build: .
     container_name: telegram-bot
     environment:
       - HOST=telegram-bot-api:8081
-      - PROVIDER_TOKEN=
-      - DB_URL=https://tg-database:8082
-      - TELEGRAM_BOT_TOKEN=
+      - PROVIDER_TOKEN=${PROVIDER_TOKEN}
+      - DB_URL=https://user-database:8082
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
     volumes:
       - .:/usr/src/telegram-bot
     depends_on:
       - telegram-bot-api
-      - tg-database
+      - user-database
     ports:
       - "8080:8080"
-
+    command: ["./telegram-bot"]
 
 volumes:
   telegram-bot-api-data:
+  postgres_data:
