@@ -9,7 +9,7 @@ import (
 	"time"
 	"youtube_downloader/internal/bot/tg/send"
 	database_client "youtube_downloader/internal/database-client"
-	youtube_downloader "youtube_downloader/internal/downloader/youtube"
+	youtube_downloader "youtube_downloader/internal/downloader/youtube/kkdai"
 	"youtube_downloader/pkg/database/models"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"

@@ -5,6 +5,7 @@
   "fileTooLarge": "Ваш файл слишком большой",
   "invalidLink": "Ваша ссылка некорректна. Просто отправьте ссылку",
   "somethingWentWrong": "Что-то пошло не так",
+  "ageRestrictionError": "Это видео имеет возрастные ограничения и недоступно для скачивания. Попробуйте другое видео.",
   "chooseSubscriptionPlan": "Выберите ваш план подписки:",
   "invalidSubscriptionType": "Неверный тип подписки. Пожалуйста, выберите 'month', 'year' или 'lifetime'.",
   "yourLink": "Ваша ссылка:",

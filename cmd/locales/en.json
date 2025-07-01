@@ -5,6 +5,7 @@
   "fileTooLarge": "Your file too large",
   "invalidLink": "Your link incorrect. Just send a link",
   "somethingWentWrong": "Something went wrong",
+  "ageRestrictionError": "This video has age restrictions and is not available for download. Please try another video.",
   "chooseSubscriptionPlan": "Choose your subscription plan:",
   "invalidSubscriptionType": "Invalid subscription type. Please choose 'month', 'year', or 'lifetime'.",
   "thankYouForPayment": "Thank you for your payment! Your access has been granted.",

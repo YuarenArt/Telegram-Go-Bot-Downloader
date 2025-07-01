@@ -1,9 +1,10 @@
 package youtube
 
 import (
-	. "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"log"
-	youtube_downloader "youtube_downloader/internal/downloader/youtube"
+	youtube_downloader "youtube_downloader/internal/downloader/youtube/kkdai"
+
+	. "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
 // handleYoutubeVideo gets all possible formats of the video by a link,

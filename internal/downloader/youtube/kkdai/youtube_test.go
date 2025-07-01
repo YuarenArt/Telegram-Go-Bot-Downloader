@@ -1,11 +1,9 @@
 package youtube
 
 import (
-	"github.com/golang/mock/gomock"
-	"github.com/kkdai/youtube/v2"
-	"github.com/kkdai/youtube/v2/downloader"
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 type TestCase struct {
@@ -61,18 +59,11 @@ var testCases = []TestCase{
 	},
 }
 
-var ytd = &YouTubeDownloader{
-	Downloader: downloader.Downloader{
-		Client: youtube.Client{},
-	},
-}
+var ytd = NewKKDAIDownloader()
 
 func TestGetPlaylist(t *testing.T) {
 	for _, tc := range playlistTestCases {
 		t.Run(tc.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
-
 			playlist, err := ytd.GetPlaylist(tc.playlistURL)
 			if tc.expectedErr {
 				assert.Error(t, err)
@@ -90,10 +81,7 @@ func TestGetPlaylist(t *testing.T) {
 func TestGetVideo(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
-
-			video, err := ytd.VideoInfo(tc.videoURL)
+			video, err := ytd.GetVideo(tc.videoURL)
 			if tc.expectedErr {
 				assert.Error(t, err)
 			} else {

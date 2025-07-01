@@ -1,4 +1,4 @@
-ARG GO_VERSION=1.21
+ARG GO_VERSION=1.23
 ARG ALPINE_VERSION=latest
 
 FROM golang:${GO_VERSION}-alpine as builder
@@ -16,7 +16,7 @@ RUN go build -o /user-database cmd/user-database/main.go
 
 FROM alpine:${ALPINE_VERSION}
 
-RUN apk --no-cache add ca-certificates ffmpeg
+RUN apk --no-cache add ca-certificates ffmpeg openssl
 
 WORKDIR /root/
 
@@ -24,11 +24,8 @@ COPY --from=builder /telegram-bot .
 COPY --from=builder /user-database .
 COPY cmd/locales cmd/locales
 
-# Create dummy certificates for development
-RUN echo "-----BEGIN CERTIFICATE-----" > /usr/local/share/ca-certificates/tg-database.crt && \
-    echo "-----END CERTIFICATE-----" >> /usr/local/share/ca-certificates/tg-database.crt && \
-    echo "-----BEGIN PRIVATE KEY-----" > key.pem && \
-    echo "-----END PRIVATE KEY-----" >> key.pem
+# Create self-signed certificates for development
+RUN openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -nodes -subj "/C=US/ST=State/L=City/O=Organization/CN=localhost"
 
 RUN update-ca-certificates
 

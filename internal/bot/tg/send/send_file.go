@@ -2,13 +2,14 @@ package send
 
 import (
 	"errors"
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"log"
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
-	youtube_downloader "youtube_downloader/internal/downloader/youtube"
+	youtube_downloader "youtube_downloader/internal/downloader/youtube/kkdai"
+
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
 // sendFile send file according its type

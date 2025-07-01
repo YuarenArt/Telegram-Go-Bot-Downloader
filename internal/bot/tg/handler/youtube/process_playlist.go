@@ -2,13 +2,14 @@ package youtube
 
 import (
 	"fmt"
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
-	"github.com/kkdai/youtube/v2"
 	"log"
 	"strings"
 	"youtube_downloader/internal/bot/tg/send"
 	database_client "youtube_downloader/internal/database-client"
-	youtube_downloader "youtube_downloader/internal/downloader/youtube"
+	youtube_downloader "youtube_downloader/internal/downloader/youtube/kkdai"
+
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"github.com/kkdai/youtube/v2"
 )
 
 func (yh *YoutubeHandler) processPlaylistAudio(bot *tgbotapi.BotAPI, callbackQuery *tgbotapi.CallbackQuery,

@@ -2,12 +2,13 @@ package youtube
 
 import (
 	"fmt"
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
-	"github.com/kkdai/youtube/v2"
 	"log"
 	"strconv"
 	"strings"
-	youtube_downloader "youtube_downloader/internal/downloader/youtube"
+	youtube_downloader "youtube_downloader/internal/downloader/youtube/kkdai"
+
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"github.com/kkdai/youtube/v2"
 )
 
 const (
