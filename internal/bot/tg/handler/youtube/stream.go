@@ -5,7 +5,6 @@ import (
 	"log"
 	"net/url"
 	"strings"
-	youtube_downloader "youtube_downloader/internal/downloader/youtube/kkdai"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
@@ -13,21 +12,18 @@ import (
 // handleYoutubeStream transforms live/ link into common video link
 // creates a keyboard and return it
 func (yh *YoutubeHandler) handleYoutubeStream(message *tgbotapi.Message) (*tgbotapi.InlineKeyboardMarkup, error) {
-
 	videoURLWithLivePrefix := message.Text
 	videoURL := FormatYouTubeURLOnStream(videoURLWithLivePrefix)
-	formats, err := youtube_downloader.FormatWithAudioChannels(videoURL)
+	video, err := yh.Downloader.GetVideo(videoURL)
 	if err != nil {
-		log.Printf("FormatWithAudioChannels return %s", err)
+		log.Printf("GetVideo return %s", err)
 		return nil, err
 	}
-
-	keyboard, err := getKeyboardVideoFormats(&formats, &videoURL)
+	keyboard, err := getKeyboardVideoFormats(video.Formats, &videoURL)
 	if err != nil {
 		log.Printf("GetKeyboard return %s", err)
 		return nil, err
 	}
-
 	return keyboard, nil
 }
 

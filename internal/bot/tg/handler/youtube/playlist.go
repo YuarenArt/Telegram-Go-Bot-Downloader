@@ -3,10 +3,9 @@ package youtube
 import (
 	"fmt"
 	"log"
-	youtube_downloader "youtube_downloader/internal/downloader/youtube/kkdai"
+	"youtube_downloader/internal/downloader/youtube"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
-	"github.com/kkdai/youtube/v2"
 )
 
 const (
@@ -16,16 +15,12 @@ const (
 // handleYoutubePlaylist gets playlist,
 // creates and return keyboard with all videos from it
 func (yh *YoutubeHandler) handleYoutubePlaylist(message *tgbotapi.Message) (*tgbotapi.InlineKeyboardMarkup, error) {
-
 	playlistURL := message.Text
-
-	downloader := youtube_downloader.NewYouTubeDownloader()
-	playlist, err := downloader.GetPlaylist(playlistURL)
+	playlist, err := yh.Downloader.GetPlaylist(playlistURL)
 	if err != nil {
 		log.Printf("GetPlaylist in handleYoutubePlaylist: %s", err)
 		return nil, err
 	}
-
 	keyboard := getKeyboardPlaylist(playlist)
 	return &keyboard, nil
 }
@@ -43,10 +38,9 @@ func getKeyboardPlaylist(playlist *youtube.Playlist) tgbotapi.InlineKeyboardMark
 		fmt.Sprintf("%s", "Download all: audio"), youtubeCheckPlaylist+","+All_audio)
 	keyboard.InlineKeyboard = append(keyboard.InlineKeyboard, []tgbotapi.InlineKeyboardButton{button})
 
-	for _, playlistEntry := range playlist.Videos {
-
+	for _, video := range playlist.Videos {
 		button := tgbotapi.NewInlineKeyboardButtonData(
-			fmt.Sprintf("%s", playlistEntry.Title), youtubeCheckPlaylist+","+playlistEntry.ID)
+			fmt.Sprintf("%s", video.Title), youtubeCheckPlaylist+","+video.ID)
 		keyboard.InlineKeyboard = append(keyboard.InlineKeyboard, []tgbotapi.InlineKeyboardButton{button})
 	}
 

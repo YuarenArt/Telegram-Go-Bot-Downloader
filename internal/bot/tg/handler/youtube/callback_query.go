@@ -9,28 +9,19 @@ import (
 	"time"
 	"youtube_downloader/internal/bot/tg/send"
 	database_client "youtube_downloader/internal/database-client"
-	youtube_downloader "youtube_downloader/internal/downloader/youtube/kkdai"
 	"youtube_downloader/pkg/database/models"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
-	"github.com/kkdai/youtube/v2"
 )
-
-// TODO rework a way to get data for downloading
-
-// TODO refactore indexes for data
 
 // HandleCallbackQuery gets url from Bot's message with a replying link,
 // then handle a link by its type: video (stream), playlist
 func (yh *YoutubeHandler) HandleCallbackQuery(callbackQuery *tgbotapi.CallbackQuery, bot *tgbotapi.BotAPI, client *database_client.Client, translations *map[string]string) {
-
-	// gets URL from a data
 	text := callbackQuery.Data
 	parts := strings.Split(text, ",")
 	URL := parts[0]
 
 	switch {
-	// TODO fix that need to obtain link for handling playlist Button
 	case strings.HasPrefix(URL, "https://youtube.com/playlist?") || URL == youtubeCheckPlaylist:
 		yh.HandleCallbackQueryWithPlaylist(callbackQuery, bot, client, translations)
 	default:
@@ -45,17 +36,17 @@ func (yh *YoutubeHandler) HandleCallbackQuery(callbackQuery *tgbotapi.CallbackQu
 // then download it with format
 func (yh *YoutubeHandler) HandleCallbackQueryWithFormats(callbackQuery *tgbotapi.CallbackQuery, bot *tgbotapi.BotAPI,
 	client *database_client.Client, translations *map[string]string) {
-
 	data := callbackQuery.Data
 	dataParts := strings.Split(data, ",")
 	videoURL := dataParts[0]
 
-	formats, err := youtube_downloader.FormatWithAudioChannelsComposite(videoURL)
+	video, err := yh.Downloader.GetVideo(videoURL)
 	if err != nil {
-		log.Printf("FormatWithAudioChannels return %s in handleCallbackQuery", err)
+		errorFormat := (*translations)["errorFormat"]
+		send.SendReplyMessage(bot, callbackQuery.Message, &errorFormat)
+		return
 	}
 
-	// gets format by its TagNo
 	tagNo, err := strconv.Atoi(dataParts[1])
 	if err != nil {
 		errorFormat := (*translations)["errorFormat"]
@@ -63,15 +54,21 @@ func (yh *YoutubeHandler) HandleCallbackQueryWithFormats(callbackQuery *tgbotapi
 		return
 	}
 
-	var formatFile youtube.Format
-	for _, format := range formats {
-		if format.ItagNo == tagNo {
-			formatFile = format
+	var formatFile map[string]any
+	for _, f := range video.Formats {
+		fm := f.(map[string]any)
+		if fm["ItagNo"].(int) == tagNo {
+			formatFile = fm
 			break
 		}
 	}
+	if formatFile == nil {
+		errorFormat := (*translations)["errorFormat"]
+		send.SendReplyMessage(bot, callbackQuery.Message, &errorFormat)
+		return
+	}
 
-	if !checkTraffic(client, callbackQuery, &formatFile) {
+	if !checkTraffic(client, callbackQuery, formatFile) {
 		trafficLimit := (*translations)["trafficLimit"]
 		_, err := send.SendReplyMessage(bot, callbackQuery.Message, &trafficLimit)
 		if err != nil {
@@ -87,13 +84,11 @@ func (yh *YoutubeHandler) HandleCallbackQueryWithFormats(callbackQuery *tgbotapi
 		log.Printf("can't send reply message: %s", err.Error())
 	}
 
-	dl := youtube_downloader.NewYouTubeDownloader()
-	video, _ := dl.GetVideo(videoURL)
 	var pathAndName string
-	if strings.HasPrefix(formatFile.MimeType, "audio") {
-		pathAndName, err = dl.DownloadWithFormat(video, formatFile)
+	if strings.HasPrefix(formatFile["MimeType"].(string), "audio") {
+		pathAndName, err = yh.Downloader.DownloadAudio(video, formatFile)
 	} else {
-		pathAndName, err = dl.DownloadVideoWithFormatComposite(context.Background(), "", video, formatFile.QualityLabel, "", "")
+		pathAndName, err = yh.Downloader.DownloadVideo(video, formatFile)
 	}
 	if err != nil {
 		log.Printf(err.Error())
@@ -101,7 +96,6 @@ func (yh *YoutubeHandler) HandleCallbackQueryWithFormats(callbackQuery *tgbotapi
 		send.SendEditMessage(bot, resp.Chat.ID, resp.MessageID, &errorFormat)
 		return
 	}
-	// start sending
 	go sendAnswer(bot, callbackQuery, &resp, &pathAndName, client, nil, translations)
 }
 
@@ -111,7 +105,7 @@ func (yh *YoutubeHandler) HandleCallbackQueryWithFormats(callbackQuery *tgbotapi
 // if callbackQuery.Data include All_video : download all videos from playlist in video format
 // else download a certain video by callbackQuery.Data
 func (yh *YoutubeHandler) HandleCallbackQueryWithPlaylist(callbackQuery *tgbotapi.CallbackQuery, bot *tgbotapi.BotAPI, client *database_client.Client, translations *map[string]string) {
-	lines := strings.Split(callbackQuery.Message.Text, "\n") // split the string into lines
+	lines := strings.Split(callbackQuery.Message.Text, "\n")
 	var playlistURL string
 	for _, line := range lines {
 		if strings.HasPrefix(line, "https://") {
@@ -119,11 +113,10 @@ func (yh *YoutubeHandler) HandleCallbackQueryWithPlaylist(callbackQuery *tgbotap
 			break
 		}
 	}
-	downloader := youtube_downloader.NewYouTubeDownloader()
-
-	playlist, err := downloader.GetPlaylist(playlistURL)
+	playlist, err := yh.Downloader.GetPlaylist(playlistURL)
 	if err != nil {
 		log.Printf("GetPlaylist in handleCallbackQueryWithPlaylist error: %v", err)
+		return
 	}
 	data := callbackQuery.Data
 	dataParts := strings.Split(data, ",")
@@ -236,7 +229,7 @@ func parseTrafficFromCallbackQuery(callbackQuery *tgbotapi.CallbackQuery) (float
 	return 0, nil
 }
 
-func checkTraffic(client *database_client.Client, callbackQuery *tgbotapi.CallbackQuery, format *youtube.Format) bool {
+func checkTraffic(client *database_client.Client, callbackQuery *tgbotapi.CallbackQuery, format map[string]any) bool {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
@@ -248,8 +241,8 @@ func checkTraffic(client *database_client.Client, callbackQuery *tgbotapi.Callba
 		log.Printf("Get nil user: %s", callbackQuery.Message.From.UserName)
 		return true
 	}
-	fileSize, err := getFileSize(*format) // bite
-	fileSize = fileSize / (1024 * 1024)   // Mb
+	fileSize, err := getFileSizeGeneric(format) // bite
+	fileSize = fileSize / (1024 * 1024)         // Mb
 	if err != nil {
 		log.Printf("can't file size: %s", err.Error())
 	}

@@ -3,7 +3,6 @@ package tg
 import (
 	"encoding/json"
 	"fmt"
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"log"
 	"os"
 	"path/filepath"
@@ -11,6 +10,9 @@ import (
 	"youtube_downloader/internal/bot/tg/handler"
 	_ "youtube_downloader/internal/database-client"
 	database_client "youtube_downloader/internal/database-client"
+	kkdaiDownloader "youtube_downloader/internal/downloader/youtube/kkdai"
+
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
 // TgBot uses telegram-Bot-api to maintain tg Bot
@@ -96,8 +98,13 @@ func (tb *TgBot) StartBot() error {
 // according to SupportedHandlers
 func (tb *TgBot) initSupportedHandlers() {
 	for _, handlerType := range handler.SupportedHandlers {
-		handler := handler.CreateHandler(handlerType)
-		tb.registerHandler(&handler)
+		var h handler.Handler
+		switch handlerType {
+		case handler.YoutubeHandler:
+			ytDownloader := kkdaiDownloader.NewKKDAIDownloader()
+			h = handler.CreateHandler(handlerType, ytDownloader)
+		}
+		tb.registerHandler(&h)
 	}
 }
 

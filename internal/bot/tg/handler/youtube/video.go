@@ -2,22 +2,20 @@ package youtube
 
 import (
 	"log"
-	youtube_downloader "youtube_downloader/internal/downloader/youtube/kkdai"
 
-	. "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
 // handleYoutubeVideo gets all possible formats of the video by a link,
 // creates a keyboard and return it
-func (yh *YoutubeHandler) handleYoutubeVideo(message *Message) (*InlineKeyboardMarkup, error) {
+func (yh *YoutubeHandler) handleYoutubeVideo(message *tgbotapi.Message) (*tgbotapi.InlineKeyboardMarkup, error) {
 	videoURL := message.Text
-	formats, err := youtube_downloader.FormatWithAudioChannelsComposite(videoURL)
+	video, err := yh.Downloader.GetVideo(videoURL)
 	if err != nil {
-		log.Printf("FormatWithAudioChannels return %s", err)
+		log.Printf("GetVideo return %s", err)
 		return nil, err
 	}
-
-	keyboard, err := getKeyboardVideoFormats(&formats, &videoURL)
+	keyboard, err := getKeyboardVideoFormats(video.Formats, &videoURL)
 	if err != nil {
 		log.Printf("GetKeyboard return %s", err)
 		return nil, err

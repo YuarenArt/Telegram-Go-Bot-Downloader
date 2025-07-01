@@ -57,7 +57,6 @@ func (d *KKDAIDownloader) DownloadAudio(video *youtube.Video, format any) (strin
 	ytd := NewYouTubeDownloader()
 	return ytd.DownloadWithFormat(kkdaiVideo, kkdaiFormat)
 }
-
 func convertVideoToGeneric(v *yt.Video) *youtube.Video {
 	formats := make([]any, len(v.Formats))
 	for i, f := range v.Formats {
