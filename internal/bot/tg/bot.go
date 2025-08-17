@@ -10,7 +10,7 @@ import (
 	"youtube_downloader/internal/bot/tg/handler"
 	_ "youtube_downloader/internal/database-client"
 	database_client "youtube_downloader/internal/database-client"
-	kkdaiDownloader "youtube_downloader/internal/downloader/youtube/kkdai"
+	kkdaiDownloader "youtube_downloader/internal/downloader/youtube/ytdl"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
@@ -101,7 +101,7 @@ func (tb *TgBot) initSupportedHandlers() {
 		var h handler.Handler
 		switch handlerType {
 		case handler.YoutubeHandler:
-			ytDownloader := kkdaiDownloader.NewKKDAIDownloader()
+			ytDownloader := kkdaiDownloader.NewYTDLBackend()
 			h = handler.CreateHandler(handlerType, ytDownloader)
 		}
 		tb.registerHandler(&h)

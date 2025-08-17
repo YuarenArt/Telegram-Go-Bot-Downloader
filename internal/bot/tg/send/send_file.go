@@ -7,7 +7,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
-	youtube_downloader "youtube_downloader/internal/downloader/youtube/kkdai"
+	youtube_downloader "youtube_downloader/internal/downloader/youtube/ytdl"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )

@@ -1,6 +1,7 @@
 package youtube
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"strings"
@@ -16,11 +17,10 @@ func (yh *YoutubeHandler) processPlaylistAudio(bot *tgbotapi.BotAPI, callbackQue
 	for _, video := range playlist.Videos {
 		formats := video.Formats
 
-		var audioFormat map[string]any
+		var audioFormat *youtube.Format
 		for _, f := range formats {
-			fm := f.(map[string]any)
-			if fm["QualityLabel"].(string) == "" {
-				audioFormat = fm
+			if f.AudioOnly {
+				audioFormat = &f
 				break
 			}
 		}
@@ -34,7 +34,11 @@ func (yh *YoutubeHandler) processPlaylistAudio(bot *tgbotapi.BotAPI, callbackQue
 		if err != nil {
 			log.Printf("can't send reply message: %s", err.Error())
 		}
-		path, err := yh.Downloader.DownloadAudio(&video, audioFormat)
+		opts := youtube.DownloadOptions{
+			FormatID:  audioFormat.Itag,
+			AudioOnly: true,
+		}
+		path, err := yh.Downloader.Download(context.Background(), video, opts)
 		if err != nil {
 			log.Printf("downloadAudio error: %v", err)
 			continue
@@ -49,11 +53,10 @@ func (yh *YoutubeHandler) processPlaylistVideo(bot *tgbotapi.BotAPI, callbackQue
 	for _, video := range playlist.Videos {
 		formats := video.Formats
 
-		var videoFormat map[string]any
+		var videoFormat *youtube.Format
 		for _, f := range formats {
-			fm := f.(map[string]any)
-			if fm["QualityLabel"].(string) != "" {
-				videoFormat = fm
+			if !f.AudioOnly {
+				videoFormat = &f
 			}
 		}
 		if videoFormat == nil {
@@ -66,7 +69,11 @@ func (yh *YoutubeHandler) processPlaylistVideo(bot *tgbotapi.BotAPI, callbackQue
 		if err != nil {
 			log.Printf("can't send reply message: %s", err.Error())
 		}
-		path, err := yh.Downloader.DownloadVideo(&video, videoFormat)
+		opts := youtube.DownloadOptions{
+			FormatID:  videoFormat.Itag,
+			AudioOnly: false,
+		}
+		path, err := yh.Downloader.Download(context.Background(), video, opts)
 		if err != nil {
 			log.Printf("downloadVideo error: %v", err)
 			continue
@@ -84,7 +91,7 @@ func (yh *YoutubeHandler) processSingleVideo(bot *tgbotapi.BotAPI, callbackQuery
 	var video *youtube.Video
 	for _, v := range playlist.Videos {
 		if v.ID == videoID {
-			video = &v
+			video = v
 			break
 		}
 	}

@@ -1,10 +1,13 @@
 package youtube
 
 import (
+	"errors"
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 	"youtube_downloader/internal/downloader/youtube"
+	"youtube_downloader/internal/downloader/youtube/ytdl"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
@@ -15,8 +18,16 @@ const (
 	TrafficLimit = 5000.0 // Mb
 )
 
+type YouTubeType int
+
+const (
+	Unknown YouTubeType = iota
+	Video
+	Playlist
+	Stream
+)
+
 // YoutubeHandler is a service for downloading video from youtube
-// Теперь использует интерфейс Downloader
 type YoutubeHandler struct {
 	Downloader youtube.Downloader
 }
@@ -24,7 +35,7 @@ type YoutubeHandler struct {
 // NewYoutubeHandler return new YoutubeHandler
 func NewYoutubeHandler(downloader youtube.Downloader) *YoutubeHandler {
 	return &YoutubeHandler{
-		Downloader: downloader,
+		Downloader: ytdl.NewYTDLBackend(),
 	}
 }
 
@@ -33,76 +44,136 @@ func (yh *YoutubeHandler) HandleMessage(message *tgbotapi.Message) (*tgbotapi.In
 	return yh.handleYoutubeLink(message)
 }
 
-// handleYoutubeLink checks the link type and calls the appropriate method
+// handleYoutubeLink normalizes the URL and routes to the correct handler
 func (yh *YoutubeHandler) handleYoutubeLink(message *tgbotapi.Message) (*tgbotapi.InlineKeyboardMarkup, error) {
+	normalizedURL, typ, err := normalizeYouTubeURL(message.Text)
+	if err != nil {
+		return nil, err
+	}
 
-	videoURL := message.Text
-	switch {
-	case strings.HasPrefix(videoURL, "https://www.youtube.com/live/"):
+	message.Text = normalizedURL
+
+	switch typ {
+	case Stream:
 		return yh.handleYoutubeStream(message)
-	case strings.HasPrefix(videoURL, "https://youtube.com/playlist?"):
+	case Playlist:
 		return yh.handleYoutubePlaylist(message)
-	default:
+	case Video:
 		return yh.handleYoutubeVideo(message)
+	default:
+		return nil, errors.New("unknown or unsupported YouTube link type")
 	}
 }
 
-// getKeyboard return InlineKeyboardMarkup by all possible video formats. Button's data include video's url and ItagNo
-func getKeyboardVideoFormats(formats []any, url *string) (*tgbotapi.InlineKeyboardMarkup, error) {
-	keyboard := tgbotapi.NewInlineKeyboardMarkup()
+// normalizeYouTubeURL parses and transforms a URL into a yt-dlp compatible format
+func normalizeYouTubeURL(raw string) (string, YouTubeType, error) {
+	raw = strings.TrimSpace(raw)
+	u, err := url.Parse(raw)
+	if err != nil {
+		return "", Unknown, err
+	}
 
-	// getting the size of audio
-	audioSize := 0.0
-	for _, f := range formats {
-		format := f.(map[string]any)
-		if format["QualityLabel"].(string) == "" {
-			size, err := getFileSizeGeneric(format)
-			if err == nil {
-				audioSize = size / (1024 * 1024)
-				break
+	host := strings.ToLower(u.Host)
+	switch {
+	case strings.HasPrefix(host, "youtu.be"):
+		id := strings.TrimPrefix(u.Path, "/")
+		if id == "" {
+			return "", Unknown, errors.New("empty video ID in youtu.be")
+		}
+		return "https://youtu.be/" + id, Video, nil
+
+	case strings.HasPrefix(host, "www.youtube.com") || strings.HasPrefix(host, "youtube.com"):
+		switch {
+		case strings.HasPrefix(u.Path, "/watch"):
+			id := u.Query().Get("v")
+			if id == "" {
+				return "", Unknown, errors.New("missing v parameter")
 			}
+			return "https://youtu.be/" + id, Video, nil
+
+		case strings.HasPrefix(u.Path, "/playlist"):
+			list := u.Query().Get("list")
+			if list == "" {
+				return "", Unknown, errors.New("missing list parameter")
+			}
+			return "https://www.youtube.com/playlist?list=" + list, Playlist, nil
+
+		case strings.HasPrefix(u.Path, "/live/"):
+			id := strings.TrimPrefix(u.Path, "/live/")
+			if id == "" {
+				return "", Unknown, errors.New("missing live stream ID")
+			}
+			return "https://www.youtube.com/live/" + id, Stream, nil
+
+		default:
+			return "", Unknown, errors.New("unsupported youtube.com path")
+		}
+
+	default:
+		return "", Unknown, errors.New("unsupported host")
+	}
+}
+
+// getKeyboardVideoFormats builds keyboard by available formats
+func getKeyboardVideoFormats(formats []youtube.Format, url *string) (*tgbotapi.InlineKeyboardMarkup, error) {
+	keyboard := tgbotapi.NewInlineKeyboardMarkup()
+	audioSize := 0.0
+
+	for _, format := range formats {
+		if format.AudioOnly && format.Bitrate > 0 {
+			duration := 180.0
+			audioSize = float64(format.Bitrate) * duration / (8 * 1024 * 1024)
+			break
 		}
 	}
 
-	for _, f := range formats {
-		format := f.(map[string]any)
-
-		mimeType := format["MimeType"].(string)
+	for _, format := range formats {
+		mimeType := format.MimeType
 		if strings.HasPrefix(mimeType, "audio/webm") || strings.HasPrefix(mimeType, "video/webm") {
 			continue
 		}
 
-		videoFormat := strings.Split(mimeType, ";")[0]
-		itagNo := format["ItagNo"].(int)
+		formatType := "Unknown"
+		if format.AudioOnly {
+			formatType = "Audio"
+		} else if format.VideoOnly {
+			formatType = "Video"
+		} else {
+			formatType = "Video+Audio"
+		}
+
+		itagNo := format.Itag
 		data := fmt.Sprintf("%s,%d", *url, itagNo)
 
-		size, err := getFileSizeGeneric(format)
-		size = size / (1024 * 1024)
-
-		if strings.HasPrefix(mimeType, "video") {
-			size = size + audioSize
+		size := 0.0
+		if format.Bitrate > 0 {
+			duration := 180.0
+			size = float64(format.Bitrate) * duration / (8 * 1024 * 1024)
+		}
+		if !format.AudioOnly {
+			size += audioSize
 		}
 
-		if err != nil {
-			return &keyboard, err
+		sign := []string{formatType}
+		if format.Quality != "" {
+			sign = append(sign, format.Quality)
 		}
-
-		sign := []string{videoFormat}
-		if ql := format["QualityLabel"].(string); ql != "" {
-			sign = append(sign, ql)
+		if format.VideoCodec != "" && !format.AudioOnly {
+			sign = append(sign, format.VideoCodec)
 		}
-		sign = append(sign, strconv.FormatFloat(size, 'f', 2, 64))
+		if format.AudioCodec != "" && format.AudioOnly {
+			sign = append(sign, format.AudioCodec)
+		}
+		sign = append(sign, fmt.Sprintf("%.1f Mb", size))
 
-		button := tgbotapi.NewInlineKeyboardButtonData(
-			fmt.Sprintf("%s Mb", strings.Join(sign, ", ")),
-			data)
+		button := tgbotapi.NewInlineKeyboardButtonData(strings.Join(sign, ", "), data)
 		keyboard.InlineKeyboard = append(keyboard.InlineKeyboard, []tgbotapi.InlineKeyboardButton{button})
 	}
 
 	return &keyboard, nil
 }
 
-// getFileSizeGeneric return a file size in bite of certain format (map[string]any)
+// getFileSizeGeneric estimates file size from metadata
 func getFileSizeGeneric(format map[string]any) (float64, error) {
 	if cl, ok := format["ContentLength"]; ok && cl.(int) > 0 {
 		return float64(cl.(int)), nil
@@ -120,6 +191,5 @@ func getFileSizeGeneric(format map[string]any) (float64, error) {
 	}
 
 	contentLength := float64(bitrate/8) * duration
-
 	return contentLength, nil
 }

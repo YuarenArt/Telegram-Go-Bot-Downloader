@@ -1,6 +1,7 @@
 package youtube
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/url"
@@ -14,7 +15,7 @@ import (
 func (yh *YoutubeHandler) handleYoutubeStream(message *tgbotapi.Message) (*tgbotapi.InlineKeyboardMarkup, error) {
 	videoURLWithLivePrefix := message.Text
 	videoURL := FormatYouTubeURLOnStream(videoURLWithLivePrefix)
-	video, err := yh.Downloader.GetVideo(videoURL)
+	video, err := yh.Downloader.GetVideo(context.Background(), videoURL)
 	if err != nil {
 		log.Printf("GetVideo return %s", err)
 		return nil, err

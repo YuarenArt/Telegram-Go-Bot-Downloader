@@ -1,6 +1,7 @@
 package youtube
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"youtube_downloader/internal/downloader/youtube"
@@ -16,7 +17,7 @@ const (
 // creates and return keyboard with all videos from it
 func (yh *YoutubeHandler) handleYoutubePlaylist(message *tgbotapi.Message) (*tgbotapi.InlineKeyboardMarkup, error) {
 	playlistURL := message.Text
-	playlist, err := yh.Downloader.GetPlaylist(playlistURL)
+	playlist, err := yh.Downloader.GetPlaylist(context.Background(), playlistURL)
 	if err != nil {
 		log.Printf("GetPlaylist in handleYoutubePlaylist: %s", err)
 		return nil, err

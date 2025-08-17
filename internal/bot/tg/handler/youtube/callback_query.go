@@ -9,6 +9,7 @@ import (
 	"time"
 	"youtube_downloader/internal/bot/tg/send"
 	database_client "youtube_downloader/internal/database-client"
+	"youtube_downloader/internal/downloader/youtube"
 	"youtube_downloader/pkg/database/models"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -40,7 +41,7 @@ func (yh *YoutubeHandler) HandleCallbackQueryWithFormats(callbackQuery *tgbotapi
 	dataParts := strings.Split(data, ",")
 	videoURL := dataParts[0]
 
-	video, err := yh.Downloader.GetVideo(videoURL)
+	video, err := yh.Downloader.GetVideo(context.Background(), videoURL)
 	if err != nil {
 		errorFormat := (*translations)["errorFormat"]
 		send.SendReplyMessage(bot, callbackQuery.Message, &errorFormat)
@@ -54,11 +55,10 @@ func (yh *YoutubeHandler) HandleCallbackQueryWithFormats(callbackQuery *tgbotapi
 		return
 	}
 
-	var formatFile map[string]any
-	for _, f := range video.Formats {
-		fm := f.(map[string]any)
-		if fm["ItagNo"].(int) == tagNo {
-			formatFile = fm
+	var formatFile *youtube.Format
+	for i, f := range video.Formats {
+		if f.Itag == tagNo {
+			formatFile = &video.Formats[i]
 			break
 		}
 	}
@@ -84,12 +84,11 @@ func (yh *YoutubeHandler) HandleCallbackQueryWithFormats(callbackQuery *tgbotapi
 		log.Printf("can't send reply message: %s", err.Error())
 	}
 
-	var pathAndName string
-	if strings.HasPrefix(formatFile["MimeType"].(string), "audio") {
-		pathAndName, err = yh.Downloader.DownloadAudio(video, formatFile)
-	} else {
-		pathAndName, err = yh.Downloader.DownloadVideo(video, formatFile)
+	opts := youtube.DownloadOptions{
+		FormatID:  formatFile.Itag,
+		AudioOnly: formatFile.AudioOnly,
 	}
+	pathAndName, err := yh.Downloader.Download(context.Background(), video, opts)
 	if err != nil {
 		log.Printf(err.Error())
 		errorFormat := (*translations)["errorFormat"]
@@ -113,7 +112,7 @@ func (yh *YoutubeHandler) HandleCallbackQueryWithPlaylist(callbackQuery *tgbotap
 			break
 		}
 	}
-	playlist, err := yh.Downloader.GetPlaylist(playlistURL)
+	playlist, err := yh.Downloader.GetPlaylist(context.Background(), playlistURL)
 	if err != nil {
 		log.Printf("GetPlaylist in handleCallbackQueryWithPlaylist error: %v", err)
 		return
@@ -229,7 +228,7 @@ func parseTrafficFromCallbackQuery(callbackQuery *tgbotapi.CallbackQuery) (float
 	return 0, nil
 }
 
-func checkTraffic(client *database_client.Client, callbackQuery *tgbotapi.CallbackQuery, format map[string]any) bool {
+func checkTraffic(client *database_client.Client, callbackQuery *tgbotapi.CallbackQuery, format *youtube.Format) bool {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
@@ -241,13 +240,14 @@ func checkTraffic(client *database_client.Client, callbackQuery *tgbotapi.Callba
 		log.Printf("Get nil user: %s", callbackQuery.Message.From.UserName)
 		return true
 	}
-	fileSize, err := getFileSizeGeneric(format) // bite
-	fileSize = fileSize / (1024 * 1024)         // Mb
-	if err != nil {
-		log.Printf("can't file size: %s", err.Error())
-	}
+	fileSize := float64(format.Bitrate) * videoDurationInSeconds(format) / (8 * 1024 * 1024) // Mb
 	if user.Traffic+fileSize > TrafficLimit && user.Subscription.SubscriptionStatus != "active" {
 		return false
 	}
 	return true
+}
+
+func videoDurationInSeconds(format *youtube.Format) float64 {
+	// Здесь можно реализовать получение длительности видео, если нужно
+	return 0 // TODO: реализовать если потребуется
 }

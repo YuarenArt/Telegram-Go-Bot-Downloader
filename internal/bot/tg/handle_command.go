@@ -110,7 +110,7 @@ func (tb *TgBot) processPayment(message *tgbotapi.Message, subscriptionType stri
 
 	err := godotenv.Load()
 	if err != nil {
-		log.Fatalf("Error loading .env file: %v", err)
+		log.Fatalf("Error loading env.example file: %v", err)
 	}
 	providerToken := os.Getenv("PROVIDER_TOKEN")
 	if providerToken == "" {

@@ -95,7 +95,7 @@ func NewDatabase(dataSourceName string) (*Database, error) {
 
 	err := godotenv.Load()
 	if err != nil {
-		log.Fatalf("Error loading .env file: %v", err)
+		log.Fatalf("Error loading env.example file: %v", err)
 	}
 
 	user := os.Getenv("DB_USER")
