@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"strconv"
 	"time"
 	"youtube_downloader/internal/downloader/youtube"
@@ -19,24 +20,32 @@ func NewMetadataParser() *MetadataParser {
 
 // ParseVideo converts JSON data into a Video struct.
 func (p *MetadataParser) ParseVideo(data []byte, sourceURL string) (*youtube.Video, error) {
+	if len(data) == 0 {
+		return nil, errors.New("empty data provided")
+	}
+	if sourceURL == "" {
+		return nil, errors.New("source URL cannot be empty")
+	}
+
 	var videoData map[string]interface{}
 	if err := json.Unmarshal(data, &videoData); err != nil {
 		return nil, fmt.Errorf("failed to parse JSON: %w", err)
 	}
 
 	id, ok := videoData["id"].(string)
-	if !ok {
+	if !ok || id == "" {
 		return nil, errors.New("invalid or missing video ID")
 	}
 
 	title, ok := videoData["title"].(string)
-	if !ok {
+	if !ok || title == "" {
 		return nil, errors.New("invalid or missing video title")
 	}
 
 	durationMs, ok := videoData["duration"].(float64)
-	if !ok {
-		return nil, errors.New("invalid or missing video duration")
+	if !ok || durationMs <= 0 {
+		// Duration might be missing for some videos, use default
+		durationMs = 0
 	}
 
 	formats, err := p.parseFormats(videoData["formats"])
@@ -55,18 +64,25 @@ func (p *MetadataParser) ParseVideo(data []byte, sourceURL string) (*youtube.Vid
 
 // ParsePlaylist converts JSON data into a Playlist struct.
 func (p *MetadataParser) ParsePlaylist(data []byte, playlistURL string) (*youtube.Playlist, error) {
+	if len(data) == 0 {
+		return nil, errors.New("empty data provided")
+	}
+	if playlistURL == "" {
+		return nil, errors.New("playlist URL cannot be empty")
+	}
+
 	var playlistData map[string]interface{}
 	if err := json.Unmarshal(data, &playlistData); err != nil {
 		return nil, fmt.Errorf("failed to parse JSON: %w", err)
 	}
 
 	id, ok := playlistData["id"].(string)
-	if !ok {
+	if !ok || id == "" {
 		return nil, errors.New("invalid or missing playlist ID")
 	}
 
 	title, ok := playlistData["title"].(string)
-	if !ok {
+	if !ok || title == "" {
 		return nil, errors.New("invalid or missing playlist title")
 	}
 
@@ -76,28 +92,37 @@ func (p *MetadataParser) ParsePlaylist(data []byte, playlistURL string) (*youtub
 	}
 
 	videos := make([]*youtube.Video, 0, len(entries))
-	for _, entry := range entries {
+	for i, entry := range entries {
 		videoData, ok := entry.(map[string]interface{})
 		if !ok {
-			return nil, errors.New("invalid video entry in playlist")
+			log.Printf("Skipping invalid video entry at index %d", i)
+			continue
 		}
 
 		videoID, ok := videoData["id"].(string)
-		if !ok {
-			return nil, errors.New("invalid video ID in playlist entry")
+		if !ok || videoID == "" {
+			log.Printf("Skipping video entry with invalid ID at index %d", i)
+			continue
 		}
+
 		videoURL := fmt.Sprintf("https://www.youtube.com/watch?v=%s", videoID)
 
 		videoJSON, err := json.Marshal(videoData)
 		if err != nil {
-			return nil, fmt.Errorf("failed to marshal video data: %w", err)
+			log.Printf("Failed to marshal video data for entry %d: %v", i, err)
+			continue
 		}
 
 		video, err := p.ParseVideo(videoJSON, videoURL)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse video entry: %w", err)
+			log.Printf("Failed to parse video entry %d: %v", i, err)
+			continue
 		}
 		videos = append(videos, video)
+	}
+
+	if len(videos) == 0 {
+		return nil, errors.New("no valid videos found in playlist")
 	}
 
 	return &youtube.Playlist{
@@ -114,58 +139,25 @@ func (p *MetadataParser) parseFormats(formatsData interface{}) ([]youtube.Format
 		return nil, errors.New("invalid formats data")
 	}
 
+	if len(formatsRaw) == 0 {
+		return nil, errors.New("no formats available")
+	}
+
 	formats := make([]youtube.Format, 0, len(formatsRaw))
-	for _, f := range formatsRaw {
+	for i, f := range formatsRaw {
 		formatData, ok := f.(map[string]interface{})
 		if !ok {
+			log.Printf("Skipping invalid format at index %d", i)
 			continue
 		}
 
-		itag, ok := formatData["format_id"].(string)
-		if !ok {
-			continue
-		}
-		itagInt, err := strconv.Atoi(itag)
+		format, err := p.parseSingleFormat(formatData)
 		if err != nil {
+			log.Printf("Skipping format at index %d: %v", i, err)
 			continue
 		}
 
-		mimeType, ok := formatData["mime_type"].(string)
-		if !ok {
-			mimeType = ""
-		}
-
-		quality, ok := formatData["format_note"].(string)
-		if !ok {
-			quality = ""
-		}
-
-		var bitrate int
-		if bitrateRaw, ok := formatData["tbr"].(float64); ok {
-			bitrate = int(bitrateRaw)
-		}
-
-		var audioCodec, videoCodec string
-		if acodec, ok := formatData["acodec"].(string); ok {
-			audioCodec = acodec
-		}
-		if vcodec, ok := formatData["vcodec"].(string); ok {
-			videoCodec = vcodec
-		}
-
-		audioOnly := audioCodec != "" && videoCodec == "none"
-		videoOnly := videoCodec != "" && audioCodec == "none"
-
-		formats = append(formats, youtube.Format{
-			Itag:       itagInt,
-			MimeType:   mimeType,
-			Quality:    quality,
-			Bitrate:    bitrate,
-			AudioOnly:  audioOnly,
-			VideoOnly:  videoOnly,
-			AudioCodec: audioCodec,
-			VideoCodec: videoCodec,
-		})
+		formats = append(formats, format)
 	}
 
 	if len(formats) == 0 {
@@ -173,4 +165,43 @@ func (p *MetadataParser) parseFormats(formatsData interface{}) ([]youtube.Format
 	}
 
 	return formats, nil
+}
+
+// parseSingleFormat parses a single format from the formats array
+func (p *MetadataParser) parseSingleFormat(formatData map[string]interface{}) (youtube.Format, error) {
+	itag, ok := formatData["format_id"].(string)
+	if !ok || itag == "" {
+		return youtube.Format{}, errors.New("invalid format_id")
+	}
+
+	itagInt, err := strconv.Atoi(itag)
+	if err != nil {
+		return youtube.Format{}, fmt.Errorf("invalid format_id format: %w", err)
+	}
+
+	mimeType, _ := formatData["mime_type"].(string)
+	quality, _ := formatData["format_note"].(string)
+
+	var bitrate int
+	if bitrateRaw, ok := formatData["tbr"].(float64); ok {
+		bitrate = int(bitrateRaw)
+	}
+
+	audioCodec, _ := formatData["acodec"].(string)
+	videoCodec, _ := formatData["vcodec"].(string)
+
+	// Determine format type
+	audioOnly := audioCodec != "" && videoCodec == "none"
+	videoOnly := videoCodec != "" && audioCodec == "none"
+
+	return youtube.Format{
+		Itag:       itagInt,
+		MimeType:   mimeType,
+		Quality:    quality,
+		Bitrate:    bitrate,
+		AudioOnly:  audioOnly,
+		VideoOnly:  videoOnly,
+		AudioCodec: audioCodec,
+		VideoCodec: videoCodec,
+	}, nil
 }

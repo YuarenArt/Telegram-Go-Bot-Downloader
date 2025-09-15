@@ -5,8 +5,8 @@ services:
     image: aiogram/telegram-bot-api:latest
     container_name: telegram-bot-api-local
     environment:
-      TELEGRAM_API_ID: ${TELEGRAM_API_ID:-}
-      TELEGRAM_API_HASH: ${TELEGRAM_API_HASH:-}
+      TELEGRAM_API_ID: 23608845
+      TELEGRAM_API_HASH: cc16b480d848a43a44e73aa24c41f254
     volumes:
       - telegram-bot-api-data:/var/lib/telegram-bot-api
     ports:
@@ -16,7 +16,7 @@ services:
     image: postgres:latest
     environment:
       POSTGRES_USER: ${DB_USER:-postgres}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-992f9a5a9fb44148a1dd7241db00f7ec}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-1413210131}
       POSTGRES_DB: ${DB_NAME:-users}
     ports:
       - "5432:5432"
@@ -32,11 +32,14 @@ services:
       - "8082:8082"
     environment:
       - DB_USER=${DB_USER:-postgres}
-      - DB_PASSWORD=${DB_PASSWORD:-992f9a5a9fb44148a1dd7241db00f7ec}
+      - DB_PASSWORD=${DB_PASSWORD:-1413210131}
       - DB_NAME=${DB_NAME:-users}
       - DB_SSLMODE=${DB_SSLMODE:-disable}
       - HOST=db
       - PORT=5432
+    volumes:
+      - ./cert.pem:/root/cert.pem
+      - ./key.pem:/root/key.pem
     command: ["./user-database"]
 
   telegram-bot:
@@ -44,9 +47,9 @@ services:
     container_name: telegram-bot
     environment:
       - HOST=telegram-bot-api:8081
-      - PROVIDER_TOKEN=${PROVIDER_TOKEN}
+      - PROVIDER_TOKEN=381764678:TEST:92774
       - DB_URL=https://user-database:8082
-      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_BOT_TOKEN=6979900763:AAFH_B1QpdIJXA87LXTRqwvhxgji8LAm9g4
     volumes:
       - .:/usr/src/telegram-bot
     depends_on:

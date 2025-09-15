@@ -2,6 +2,7 @@ package youtube
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"strconv"
@@ -18,8 +19,18 @@ import (
 // HandleCallbackQuery gets url from Bot's message with a replying link,
 // then handle a link by its type: video (stream), playlist
 func (yh *YoutubeHandler) HandleCallbackQuery(callbackQuery *tgbotapi.CallbackQuery, bot *tgbotapi.BotAPI, client *database_client.Client, translations *map[string]string) {
+	if callbackQuery == nil || callbackQuery.Data == "" {
+		log.Println("Invalid callback query")
+		return
+	}
+
 	text := callbackQuery.Data
 	parts := strings.Split(text, ",")
+	if len(parts) < 2 {
+		log.Printf("Invalid callback data format: %s", text)
+		return
+	}
+
 	URL := parts[0]
 
 	switch {
@@ -37,32 +48,36 @@ func (yh *YoutubeHandler) HandleCallbackQuery(callbackQuery *tgbotapi.CallbackQu
 // then download it with format
 func (yh *YoutubeHandler) HandleCallbackQueryWithFormats(callbackQuery *tgbotapi.CallbackQuery, bot *tgbotapi.BotAPI,
 	client *database_client.Client, translations *map[string]string) {
+
 	data := callbackQuery.Data
 	dataParts := strings.Split(data, ",")
+	if len(dataParts) < 2 {
+		log.Printf("Invalid callback data format: %s", data)
+		return
+	}
+
 	videoURL := dataParts[0]
+	tagNoStr := dataParts[1]
 
 	video, err := yh.Downloader.GetVideo(context.Background(), videoURL)
 	if err != nil {
+		log.Printf("Failed to get video: %v", err)
 		errorFormat := (*translations)["errorFormat"]
 		send.SendReplyMessage(bot, callbackQuery.Message, &errorFormat)
 		return
 	}
 
-	tagNo, err := strconv.Atoi(dataParts[1])
+	tagNo, err := strconv.Atoi(tagNoStr)
 	if err != nil {
+		log.Printf("Invalid tag number: %s", tagNoStr)
 		errorFormat := (*translations)["errorFormat"]
 		send.SendReplyMessage(bot, callbackQuery.Message, &errorFormat)
 		return
 	}
 
-	var formatFile *youtube.Format
-	for i, f := range video.Formats {
-		if f.Itag == tagNo {
-			formatFile = &video.Formats[i]
-			break
-		}
-	}
+	formatFile := findFormatByItag(video.Formats, tagNo)
 	if formatFile == nil {
+		log.Printf("Format not found for tag: %d", tagNo)
 		errorFormat := (*translations)["errorFormat"]
 		send.SendReplyMessage(bot, callbackQuery.Message, &errorFormat)
 		return
@@ -82,20 +97,33 @@ func (yh *YoutubeHandler) HandleCallbackQueryWithFormats(callbackQuery *tgbotapi
 	resp, err := send.SendReplyMessage(bot, callbackQuery.Message, &downloadingNotification)
 	if err != nil {
 		log.Printf("can't send reply message: %s", err.Error())
+		return
 	}
 
 	opts := youtube.DownloadOptions{
 		FormatID:  formatFile.Itag,
 		AudioOnly: formatFile.AudioOnly,
 	}
+
 	pathAndName, err := yh.Downloader.Download(context.Background(), video, opts)
 	if err != nil {
-		log.Printf(err.Error())
+		log.Printf("Download failed: %v", err)
 		errorFormat := (*translations)["errorFormat"]
 		send.SendEditMessage(bot, resp.Chat.ID, resp.MessageID, &errorFormat)
 		return
 	}
+
 	go sendAnswer(bot, callbackQuery, &resp, &pathAndName, client, nil, translations)
+}
+
+// findFormatByItag finds a format by its itag number
+func findFormatByItag(formats []youtube.Format, itag int) *youtube.Format {
+	for i, f := range formats {
+		if f.Itag == itag {
+			return &formats[i]
+		}
+	}
+	return nil
 }
 
 // HandleCallbackQueryWithPlaylist gets link on playlist by callbackQuery.Message.Text
@@ -112,13 +140,24 @@ func (yh *YoutubeHandler) HandleCallbackQueryWithPlaylist(callbackQuery *tgbotap
 			break
 		}
 	}
+
+	if playlistURL == "" {
+		log.Println("No playlist URL found in message")
+		return
+	}
+
 	playlist, err := yh.Downloader.GetPlaylist(context.Background(), playlistURL)
 	if err != nil {
 		log.Printf("GetPlaylist in handleCallbackQueryWithPlaylist error: %v", err)
 		return
 	}
+
 	data := callbackQuery.Data
 	dataParts := strings.Split(data, ",")
+	if len(dataParts) < 2 {
+		log.Printf("Invalid callback data format: %s", data)
+		return
+	}
 
 	switch {
 	case dataParts[1] == All_audio:
@@ -131,11 +170,19 @@ func (yh *YoutubeHandler) HandleCallbackQueryWithPlaylist(callbackQuery *tgbotap
 }
 
 func deleteFile(pathToFile string) error {
+	if pathToFile == "" {
+		return nil
+	}
 	return os.Remove(pathToFile)
 }
 
 func sendAnswer(bot *tgbotapi.BotAPI, callbackQuery *tgbotapi.CallbackQuery, resp *tgbotapi.Message,
 	path *string, client *database_client.Client, traffic *float64, translations *map[string]string) {
+
+	if path == nil || *path == "" {
+		log.Println("Invalid file path for sending")
+		return
+	}
 
 	sendingNotification := (*translations)["sendingNotification"]
 	err := send.SendEditMessage(bot, resp.Chat.ID, resp.MessageID, &sendingNotification)
@@ -208,15 +255,40 @@ func getOrCreateUser(ctx context.Context, client *database_client.Client, callba
 }
 
 func parseTrafficFromCallbackQuery(callbackQuery *tgbotapi.CallbackQuery) (float64, error) {
+	if callbackQuery.Message == nil || callbackQuery.Message.ReplyMarkup == nil {
+		return 0, fmt.Errorf("invalid message or reply markup")
+	}
+
 	tokens := strings.Split(callbackQuery.Data, ",")
+	if len(tokens) < 2 {
+		return 0, fmt.Errorf("invalid callback data format")
+	}
+
 	itagNo := tokens[1]
+
 	for _, row := range callbackQuery.Message.ReplyMarkup.InlineKeyboard {
 		for _, keyboardButton := range row {
+			if keyboardButton.CallbackData == nil {
+				continue
+			}
+
 			tokens := strings.Split(*keyboardButton.CallbackData, ",")
+			if len(tokens) < 2 {
+				continue
+			}
+
 			itag := tokens[len(tokens)-1]
 			if itagNo == itag {
 				tokens = strings.Split(keyboardButton.Text, ",")
+				if len(tokens) == 0 {
+					continue
+				}
+
 				tokens = strings.Split(tokens[len(tokens)-1], " ")
+				if len(tokens) < 2 {
+					continue
+				}
+
 				traffic, err := strconv.ParseFloat(tokens[1], 64)
 				if err != nil {
 					return 0, err
@@ -240,14 +312,26 @@ func checkTraffic(client *database_client.Client, callbackQuery *tgbotapi.Callba
 		log.Printf("Get nil user: %s", callbackQuery.Message.From.UserName)
 		return true
 	}
-	fileSize := float64(format.Bitrate) * videoDurationInSeconds(format) / (8 * 1024 * 1024) // Mb
+
+	fileSize := estimateFileSize(format)
 	if user.Traffic+fileSize > TrafficLimit && user.Subscription.SubscriptionStatus != "active" {
 		return false
 	}
 	return true
 }
 
-func videoDurationInSeconds(format *youtube.Format) float64 {
-	// Здесь можно реализовать получение длительности видео, если нужно
-	return 0 // TODO: реализовать если потребуется
+// estimateFileSize estimates file size from format metadata
+func estimateFileSize(format *youtube.Format) float64 {
+	if format == nil {
+		return 0
+	}
+
+	// Use actual duration if available, otherwise use default
+	duration := DefaultDuration
+	if format.Bitrate > 0 {
+		fileSize := float64(format.Bitrate) * duration / BytesPerMB
+		return fileSize
+	}
+
+	return 0
 }

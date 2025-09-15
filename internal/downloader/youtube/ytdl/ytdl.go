@@ -25,6 +25,13 @@ func NewYTDLBackend() *YTDLBackend {
 
 // GetVideo retrieves metadata for a single video URL.
 func (y *YTDLBackend) GetVideo(ctx context.Context, videoURL string) (*youtube.Video, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf("context cannot be nil")
+	}
+	if videoURL == "" {
+		return nil, fmt.Errorf("video URL cannot be empty")
+	}
+
 	// Execute youtube-dl command to get metadata
 	output, err := y.executor.RunVideoMetadata(ctx, videoURL)
 	if err != nil {
@@ -42,6 +49,13 @@ func (y *YTDLBackend) GetVideo(ctx context.Context, videoURL string) (*youtube.V
 
 // GetPlaylist retrieves metadata for a playlist URL.
 func (y *YTDLBackend) GetPlaylist(ctx context.Context, playlistURL string) (*youtube.Playlist, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf("context cannot be nil")
+	}
+	if playlistURL == "" {
+		return nil, fmt.Errorf("playlist URL cannot be empty")
+	}
+
 	// Execute youtube-dl command to get playlist metadata
 	output, err := y.executor.RunPlaylistMetadata(ctx, playlistURL)
 	if err != nil {
@@ -59,6 +73,21 @@ func (y *YTDLBackend) GetPlaylist(ctx context.Context, playlistURL string) (*you
 
 // Download fetches the video or audio file according to the provided options.
 func (y *YTDLBackend) Download(ctx context.Context, video *youtube.Video, opts youtube.DownloadOptions) (string, error) {
+	if ctx == nil {
+		return "", fmt.Errorf("context cannot be nil")
+	}
+	if video == nil {
+		return "", fmt.Errorf("video cannot be nil")
+	}
+	if video.SourceURL == "" {
+		return "", fmt.Errorf("video source URL cannot be empty")
+	}
+
+	// Validate and set default options
+	if err := y.validateDownloadOptions(&opts); err != nil {
+		return "", fmt.Errorf("invalid download options: %w", err)
+	}
+
 	// Build and execute download command
 	outputPath, err := y.executor.RunDownload(ctx, video.SourceURL, opts)
 	if err != nil {
@@ -68,29 +97,81 @@ func (y *YTDLBackend) Download(ctx context.Context, video *youtube.Video, opts y
 	return outputPath, nil
 }
 
-// ChangeFileExtension changes to the specified extension
-func ChangeFileExtension(filePath, extension string) error {
-	// Check if the file exists
-	if _, err := os.Stat(filePath); err != nil {
-		if !fileExists(filePath) {
-			return fmt.Errorf("file %s does not exist", filePath)
-		}
-		return err
+// validateDownloadOptions validates and sets default values for download options
+func (y *YTDLBackend) validateDownloadOptions(opts *youtube.DownloadOptions) error {
+	if opts.OutputDir == "" {
+		opts.OutputDir = "download"
 	}
 
-	fileName := strings.TrimSuffix(filepath.Base(filePath), filepath.Ext(filePath))
-	fileDir := filepath.Dir(filePath)
-	newFilePath := filepath.Join(fileDir, fileName+extension)
+	if opts.Filename == "" {
+		opts.Filename = "video"
+	}
 
-	if err := os.Rename(filePath, newFilePath); err != nil {
-		return fmt.Errorf("error renaming file: %s", err)
+	// Ensure output directory exists
+	if err := os.MkdirAll(opts.OutputDir, 0755); err != nil {
+		return fmt.Errorf("failed to create output directory: %w", err)
 	}
 
 	return nil
 }
 
-// fileExists return true if file with filePath exists
+// ChangeFileExtension changes the file extension to the specified one
+func ChangeFileExtension(filePath, newExtension string) error {
+	if filePath == "" {
+		return fmt.Errorf("file path cannot be empty")
+	}
+	if newExtension == "" {
+		return fmt.Errorf("new extension cannot be empty")
+	}
+
+	// Ensure new extension starts with a dot
+	if !strings.HasPrefix(newExtension, ".") {
+		newExtension = "." + newExtension
+	}
+
+	// Check if the original file exists
+	if !fileExists(filePath) {
+		return fmt.Errorf("file %s does not exist", filePath)
+	}
+
+	// Get file info
+	fileInfo, err := os.Stat(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to get file info: %w", err)
+	}
+
+	// Check if it's a regular file
+	if fileInfo.IsDir() {
+		return fmt.Errorf("path %s is a directory, not a file", filePath)
+	}
+
+	// Build new file path
+	fileName := strings.TrimSuffix(filepath.Base(filePath), filepath.Ext(filePath))
+	fileDir := filepath.Dir(filePath)
+	newFilePath := filepath.Join(fileDir, fileName+newExtension)
+
+	// Check if target file already exists
+	if fileExists(newFilePath) {
+		// Remove existing file first
+		if err := os.Remove(newFilePath); err != nil {
+			return fmt.Errorf("failed to remove existing file %s: %w", newFilePath, err)
+		}
+	}
+
+	// Rename the file
+	if err := os.Rename(filePath, newFilePath); err != nil {
+		return fmt.Errorf("failed to rename file from %s to %s: %w", filePath, newFilePath, err)
+	}
+
+	return nil
+}
+
+// fileExists returns true if a file with the given path exists
 func fileExists(filePath string) bool {
+	if filePath == "" {
+		return false
+	}
+
 	_, err := os.Stat(filePath)
 	return !os.IsNotExist(err)
 }

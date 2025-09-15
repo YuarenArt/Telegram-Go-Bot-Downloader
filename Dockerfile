@@ -29,8 +29,9 @@ RUN openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -
 
 RUN update-ca-certificates
 
-# Copy env.example as .env (environment variables will be overridden by docker-compose)
-COPY env.example .env
+# Copy env.example as env.example (environment variables will be overridden by docker-compose)
+COPY env. .env
+COPY cookies.txt .
 
 EXPOSE 8080/tcp
 EXPOSE 8082/tcp
