@@ -34,19 +34,25 @@ type Playlist struct {
 
 // Format describes a specific stream format.
 type Format struct {
-	Itag       int
-	MimeType   string
-	Quality    string
-	Bitrate    int
-	AudioOnly  bool
-	VideoOnly  bool
-	AudioCodec string
-	VideoCodec string
+	Itag           int
+	FormatID       string
+	Ext            string
+	Height         int
+	Width          int
+	AudioOnly      bool
+	VideoOnly      bool
+	Bitrate        int
+	MimeType       string
+	Quality        string
+	AudioCodec     string
+	VideoCodec     string
+	FileSize       int64
+	FileSizeApprox int64
 }
 
 // DownloadOptions groups parameters for Download.
 type DownloadOptions struct {
-	FormatID  int // Itag or custom identifier
+	Format    string // Itag or custom identifier
 	AudioOnly bool
 	OutputDir string
 	Filename  string

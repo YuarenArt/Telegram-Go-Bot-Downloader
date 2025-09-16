@@ -6,424 +6,317 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"os"
-	"strings"
-	"sync"
 	"time"
 
+	"youtube_downloader/pkg/database"
 	"youtube_downloader/pkg/database/models"
 
-	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 )
 
-// Database represents the database connection and operations
+// Database is a thin wrapper around sql.DB providing application operations.
 type Database struct {
-	DB *sql.DB
-	mu sync.Mutex
+	db     *sql.DB
+	config *database.Config
 }
 
-// SQL Queries
-const (
-	createTableUsers = `
-    CREATE TABLE IF NOT EXISTS users (
-        username TEXT PRIMARY KEY,
-        subscription_id SERIAL NOT NULL,
-        traffic REAL DEFAULT 0,
-        chat_id BIGINT,
-        FOREIGN KEY (subscription_id) REFERENCES subscriptions(id) ON DELETE CASCADE
-    );`
-
-	createTableSubscriptions = `
-    CREATE TABLE IF NOT EXISTS subscriptions (
-        id SERIAL PRIMARY KEY,
-        subscription_status TEXT DEFAULT 'inactive',
-        duration TEXT NOT NULL DEFAULT 'month',
-        start_subscription TIMESTAMP NOT NULL,
-        end_subscription TIMESTAMP NOT NULL
-    );`
-
-	selectUserSQL = `
-    		SELECT  users.username, users.traffic, users.chat_id, 
-           			subscriptions.id, subscriptions.subscription_status, 
-          			subscriptions.duration, subscriptions.start_subscription, subscriptions.end_subscription
-    		FROM users 
-    		JOIN subscriptions ON users.subscription_id = subscriptions.id 
-    		WHERE users.username = $1`
-
-	updateUserSubscriptionSQL = `
-    		UPDATE subscriptions 
-        	SET subscription_status = $1, duration = $2, start_subscription = $3, end_subscription = $4
-        	WHERE id = (SELECT subscription_id FROM users WHERE username = $5)`
-
-	userSubscriptionStatusSQL = `
-			SELECT subscriptions.subscription_status 
-			FROM users 
-			JOIN subscriptions ON users.subscription_id = subscriptions.id 
-			WHERE users.username = $1`
-
-	deleteSubscriptionIfUnusedSQL = `
-            DELETE FROM subscriptions 
-            WHERE id = $1 AND NOT EXISTS (SELECT 1 FROM users WHERE subscription_id = $1)`
-	unusedSubscriptionsSQL = `
-            SELECT id FROM subscriptions 
-            WHERE NOT EXISTS (SELECT 1 FROM users WHERE users.subscription_id = subscriptions.id)`
-
-	insertUserSQL        = "INSERT INTO users (username, subscription_id, chat_id) VALUES ($1, $2, $3)"
-	deleteUserSQL        = "DELETE FROM users WHERE username = $1"
-	userExistsSQL        = "SELECT EXISTS(SELECT 1 FROM users WHERE username = $1)"
-	addSubscription      = "INSERT INTO subscriptions (subscription_status, duration, start_subscription, end_subscription) VALUES ($1, $2, $3, $4) RETURNING id"
-	subscriptionId       = "SELECT subscription_id FROM users WHERE username = $1"
-	updateUserTrafficSQL = "UPDATE users SET traffic = $1 WHERE username = $2"
-	allUsername          = "SELECT username FROM users"
-)
-
-const timeFormat = time.RFC3339
-
-func FormatTime(t time.Time) string {
-	return t.Format(timeFormat)
+// Close closes underlying DB connection.
+func (d *Database) Close() error {
+	if d == nil || d.db == nil {
+		return nil
+	}
+	return d.db.Close()
 }
 
-var dbInitMu sync.Mutex
+// NewDatabase opens connection to Postgres, sets pool params, runs migrations and returns Database.
+// It will attempt multiple retries with backoff to increase resiliency on startup.
+func NewDatabase(ctx context.Context, cfg *database.Config) (*Database, error) {
+	if cfg == nil {
+		cfg = database.DefaultConfig()
+	}
 
-// NewDatabase initializes and returns a new Database instance
-func NewDatabase(dataSourceName string) (*Database, error) {
-	dbInitMu.Lock()
-	defer dbInitMu.Unlock()
+	// Try connecting with simple retry/backoff (for containerized environments).
+	var db *sql.DB
+	var err error
+	maxAttempts := 5
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		db, err = sql.Open("postgres", cfg.DSN())
+		if err == nil {
+			// configure pool
+			db.SetMaxOpenConns(cfg.MaxOpenConns)
+			db.SetMaxIdleConns(cfg.MaxIdleConns)
+			db.SetConnMaxLifetime(5 * time.Minute)
 
-	log.Println("Opening database connection...")
+			// ping with timeout
+			pctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			err = db.PingContext(pctx)
+			cancel()
+			if err == nil {
+				break
+			}
+		}
 
-	err := godotenv.Load()
+		// close if opened
+		if db != nil {
+			_ = db.Close()
+		}
+
+		wait := time.Duration(attempt*500) * time.Millisecond
+		log.Printf("database connection attempt %d/%d failed: %v; retrying in %s", attempt, maxAttempts, err, wait)
+		select {
+		case <-time.After(wait):
+			// continue retry
+		case <-ctx.Done():
+			return nil, fmt.Errorf("context cancelled while connecting to database: %w", ctx.Err())
+		}
+	}
 	if err != nil {
-		log.Fatalf("Error loading env.example file: %v", err)
+		return nil, fmt.Errorf("could not connect to database: %w", err)
 	}
 
-	user := os.Getenv("DB_USER")
-	password := os.Getenv("DB_PASSWORD")
-	dbname := os.Getenv("DB_NAME")
-	sslmode := os.Getenv("DB_SSLMODE")
-	host := os.Getenv("HOST")
-	port := os.Getenv("PORT")
-	defaultConnStr := fmt.Sprintf(
-		"user=%s password=%s dbname=postgres host=%s port=%s sslmode=%s",
-		user, password, host, port, sslmode,
-	)
-
-	log.Println("defaultConnStr: ", defaultConnStr)
-
-	defaultDB, err := sql.Open("postgres", defaultConnStr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open default database: %w", err)
-	}
-	defer defaultDB.Close()
-
-	// Create the new database
-	_, err = defaultDB.Exec("CREATE DATABASE users")
-	if err != nil && err.Error() != "pq: database \"users\" already exists" {
-		log.Printf("failed to create database: %s", err.Error())
+	repo := &Database{
+		db:     db,
+		config: cfg,
 	}
 
-	// Connect to the newly created database
-	ConnStr := fmt.Sprintf(
-		"user=%s password=%s dbname=%s host=%s port=%s sslmode=%s",
-		user, password, dbname, host, port, sslmode,
-	)
-	db, err := sql.Open("postgres", ConnStr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to the new database: %w", err)
+	// Initialize schema (create tables and indexes).
+	if err := repo.initSchema(ctx); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("failed to initialize schema: %w", err)
 	}
 
-	db.SetMaxOpenConns(25)
-	db.SetMaxIdleConns(25)
-	db.SetConnMaxLifetime(time.Hour)
-
-	// Initialize subscriptions table
-	_, err = db.Exec(createTableSubscriptions)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create subscriptions table: %w", err)
-	}
-
-	// Initialize users table
-	_, err = db.Exec(createTableUsers)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create users table: %w", err)
-	}
-
-	// Create a new Database instance
-	newDB := &Database{
-		DB: db,
-	}
-
-	// Clean up unused subscriptions
-	err = newDB.cleanupUnusedSubscriptions(context.Background())
-	if err != nil {
-		return nil, fmt.Errorf("failed to clean up unused subscriptions: %w", err)
+	// Cleanup unused subscriptions
+	if _, err := db.ExecContext(context.Background(), cleanupUnusedSubscriptionsSQL); err != nil {
+		// log but don't fail startup: cleanup is best-effort
+		log.Printf("warning: cleanupUnusedSubscriptions failed: %v", err)
 	}
 
 	log.Println("Database connection established successfully.")
-
-	return newDB, nil
+	return repo, nil
 }
 
-// cleanupUnusedSubscriptions deletes all unused subscriptions
-func (db *Database) cleanupUnusedSubscriptions(ctx context.Context) error {
-	rows, err := db.DB.QueryContext(ctx, unusedSubscriptionsSQL)
-	if err != nil {
-		return fmt.Errorf("failed to execute unused subscriptions query: %w", err)
+// initSchema creates tables and indexes if not exist.
+func (d *Database) initSchema(ctx context.Context) error {
+	statements := []string{
+		createTableSubscriptions,
+		createTableUsers,
+		createUserChatIDIdx,
+		createUserSubscriptionIDIdx,
+		createSubscriptionStatusIdx,
+		createSubscriptionDatesIdx,
 	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var subscriptionID int64
-		if err := rows.Scan(&subscriptionID); err != nil {
-			return fmt.Errorf("failed to scan row: %w", err)
-		}
-
-		stmt, err := db.DB.PrepareContext(ctx, deleteSubscriptionIfUnusedSQL)
-		if err != nil {
-			return fmt.Errorf("failed to prepare delete subscription statement: %w", err)
-		}
-		defer stmt.Close()
-
-		_, err = stmt.ExecContext(ctx, subscriptionID)
-		if err != nil {
-			return fmt.Errorf("failed to execute delete subscription statement: %w", err)
+	for _, s := range statements {
+		if _, err := d.db.ExecContext(ctx, s); err != nil {
+			return fmt.Errorf("schema exec failed: %w", err)
 		}
 	}
-
-	if err := rows.Err(); err != nil {
-		return fmt.Errorf("row iteration error: %w", err)
-	}
-
 	return nil
 }
 
-// addSubscription inserts a new empty subscription into the subscriptions table
-func (db *Database) addSubscription(ctx context.Context) (int64, error) {
-	stmt, err := db.DB.PrepareContext(ctx, addSubscription)
-	if err != nil {
-		return 0, fmt.Errorf("failed to prepare subscription insert statement: %w", err)
+// CreateUser creates a subscription and a user in a single transaction.
+// Returns error when username invalid or DB operation failed.
+func (d *Database) CreateUser(ctx context.Context, user *models.User) error {
+	if user == nil {
+		return errors.New("user is nil")
 	}
-	defer stmt.Close()
+	if user.Username == "" {
+		return errors.New("username is required")
+	}
 
-	startSubscription := FormatTime(time.Now())
-	endSubscription := FormatTime(time.Time{})
-	duration := "month"
-	suscriptionStatus := "inactive"
+	// Use transaction so that subscription and user insertion is atomic.
+	tx, err := d.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer func() {
+		// Ensure tx rollback if not committed.
+		_ = tx.Rollback()
+	}()
 
+	// Insert subscription and return id.
 	var subscriptionID int64
-	err = stmt.QueryRowContext(ctx, suscriptionStatus, duration, startSubscription, endSubscription).Scan(&subscriptionID)
-	if err != nil {
-		return 0, fmt.Errorf("failed to execute subscription insert statement: %w", err)
+	// If user.Subscription has Start/End zero, set defaults.
+	start := user.Subscription.StartSubscription
+	if start.IsZero() {
+		start = time.Now()
 	}
-	return subscriptionID, nil
-}
-
-// CreateUser adds a new user to the database
-func (db *Database) CreateUser(ctx context.Context, user *models.User) error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
-	log.Printf("Preparing to insert user: %s", user.Username)
-
-	if strings.TrimSpace(user.Username) == "" {
-		return errors.New("unsupported username")
+	end := user.Subscription.EndSubscription
+	if end.IsZero() {
+		end = start.AddDate(0, 1, 0) // default 1 month
 	}
-
-	subscriptionID, err := db.addSubscription(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to add subscription: %w", err)
+	if err := tx.QueryRowContext(ctx, insertSubscriptionSQL,
+		defaultString(user.Subscription.SubscriptionStatus, "inactive"),
+		defaultString(user.Subscription.Duration, "month"),
+		start,
+		end,
+	).Scan(&subscriptionID); err != nil {
+		return fmt.Errorf("insert subscription: %w", err)
 	}
 
-	stmt, err := db.DB.PrepareContext(ctx, insertUserSQL)
-	if err != nil {
-		return fmt.Errorf("failed to prepare insert statement: %w", err)
-	}
-	defer stmt.Close()
-
-	_, err = stmt.ExecContext(ctx, user.Username, subscriptionID, user.ChatID)
-	if err != nil {
-		return fmt.Errorf("failed to execute insert statement: %w", err)
+	// Insert user
+	if _, err := tx.ExecContext(ctx, insertUserSQL, user.Username, subscriptionID, user.ChatID); err != nil {
+		return fmt.Errorf("insert user: %w", err)
 	}
 
-	log.Printf("User %s created successfully.", user.Username)
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit transaction: %w", err)
+	}
+
 	return nil
 }
 
-// User retrieves a user by Telegram username
-func (db *Database) User(ctx context.Context, username string) (*models.User, error) {
+// User retrieves user + subscription by username.
+func (d *Database) User(ctx context.Context, username string) (*models.User, error) {
+	if username == "" {
+		return nil, errors.New("username is required")
+	}
 
-	log.Printf("Retrieving user: %s", username)
-	var usr models.User
-	var sub models.Subscription
+	row := d.db.QueryRowContext(ctx, selectUserSQL, username)
 
-	row := db.DB.QueryRowContext(ctx, selectUserSQL, username)
-
-	var startSubscription, endSubscription string
-
+	var u models.User
+	var s models.Subscription
 	err := row.Scan(
-		&usr.Username,
-		&usr.Traffic,
-		&usr.ChatID,
-		&sub.ID,
-		&sub.SubscriptionStatus,
-		&sub.Duration,
-		&startSubscription,
-		&endSubscription,
+		&u.Username,
+		&u.Traffic,
+		&u.ChatID,
+		&u.CreatedAt,
+		&u.UpdatedAt,
+		&s.ID,
+		&s.SubscriptionStatus,
+		&s.Duration,
+		&s.StartSubscription,
+		&s.EndSubscription,
+		&s.CreatedAt,
+		&s.UpdatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			log.Printf("User %s not found.", username)
-			return nil, err
+			return nil, sql.ErrNoRows
 		}
-		return nil, fmt.Errorf("failed to scan row: %w", err)
+		return nil, fmt.Errorf("scan user: %w", err)
 	}
-
-	sub.StartSubscription, err = time.Parse(timeFormat, startSubscription)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse start_subscription: %w", err)
-	}
-
-	sub.EndSubscription, err = time.Parse(timeFormat, endSubscription)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse end_subscription: %w", err)
-	}
-
-	usr.Subscription = sub
-	log.Printf("User retrieved: %s", username)
-	return &usr, nil
+	u.Subscription = s
+	return &u, nil
 }
 
-// UpdateUserSubscription updates a user's subscription status
-func (db *Database) UpdateUserSubscription(ctx context.Context, username string, newSubscription models.Subscription) error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
+// UpdateUserSubscription updates subscription fields for the given username.
+func (d *Database) UpdateUserSubscription(ctx context.Context, username string, newSub models.Subscription) error {
+	if username == "" {
+		return errors.New("username is required")
+	}
 
-	log.Printf("Updating user: %s", username)
-
-	exists, err := db.IsUserExists(ctx, username)
+	// Check user exists
+	exists, err := d.IsUserExists(ctx, username)
 	if err != nil {
-		return fmt.Errorf("failed to check if user exists: %w", err)
+		return fmt.Errorf("check exists: %w", err)
 	}
 	if !exists {
-		return fmt.Errorf("user %s not found", username)
+		return sql.ErrNoRows
 	}
 
-	stmt, err := db.DB.PrepareContext(ctx, updateUserSubscriptionSQL)
+	// Execute update (affects subscription linked to user)
+	res, err := d.db.ExecContext(ctx, updateSubscriptionByUsernameSQL,
+		defaultString(newSub.SubscriptionStatus, "inactive"),
+		defaultString(newSub.Duration, "month"),
+		nullableTime(newSub.StartSubscription),
+		nullableTime(newSub.EndSubscription),
+		username,
+	)
 	if err != nil {
-		return fmt.Errorf("failed to prepare update statement: %w", err)
+		return fmt.Errorf("update subscription: %w", err)
 	}
-	defer stmt.Close()
-
-	startSubscription := FormatTime(newSubscription.StartSubscription)
-	endSubscription := FormatTime(newSubscription.EndSubscription)
-
-	_, err = stmt.ExecContext(ctx, newSubscription.SubscriptionStatus, newSubscription.Duration, startSubscription, endSubscription, username)
-	if err != nil {
-		return fmt.Errorf("failed to execute update statement: %w", err)
+	// Optional: verify rows affected > 0
+	if n, _ := res.RowsAffected(); n == 0 {
+		// nothing was updated; could be because values equal previous ones.
+		log.Printf("update subscription: no rows affected for user %s", username)
 	}
-
-	log.Printf("User %s updated successfully.", username)
 	return nil
 }
 
-// DeleteUser removes a user from the database
-func (db *Database) DeleteUser(ctx context.Context, username string) error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
-	log.Printf("Preparing to delete user: %s", username)
-
-	stmt, err := db.DB.PrepareContext(ctx, deleteUserSQL)
-	if err != nil {
-		return fmt.Errorf("failed to prepare delete statement: %w", err)
+// DeleteUser deletes user (and subscription will cascade-delete).
+func (d *Database) DeleteUser(ctx context.Context, username string) error {
+	if username == "" {
+		return errors.New("username is required")
 	}
-	defer stmt.Close()
-
-	_, err = stmt.ExecContext(ctx, username)
+	_, err := d.db.ExecContext(ctx, deleteUserSQL, username)
 	if err != nil {
-		return fmt.Errorf("failed to execute delete statement: %w", err)
+		return fmt.Errorf("delete user: %w", err)
 	}
-
-	log.Printf("User %s and their subscription deleted successfully.", username)
 	return nil
 }
 
-// IsUserExists checks if a user exists in the database
-func (db *Database) IsUserExists(ctx context.Context, username string) (bool, error) {
-
-	log.Printf("Checking if user exists: %s", username)
+// IsUserExists checks existence.
+func (d *Database) IsUserExists(ctx context.Context, username string) (bool, error) {
 	var exists bool
-	err := db.DB.QueryRowContext(ctx, userExistsSQL, username).Scan(&exists)
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return false, fmt.Errorf("failed to check if user exists: %w", err)
+	if err := d.db.QueryRowContext(ctx, userExistsSQL, username).Scan(&exists); err != nil {
+		return false, fmt.Errorf("exists query: %w", err)
 	}
-
-	log.Printf("User: %s, exists: %v", username, exists)
 	return exists, nil
 }
 
-// SubscriptionStatus returns the user's subscription status
-func (db *Database) SubscriptionStatus(ctx context.Context, username string) (string, error) {
-
-	log.Printf("Checking subscription status: %s", username)
-
-	var subscriptionStatus string
-	err := db.DB.QueryRowContext(ctx, userSubscriptionStatusSQL, username).Scan(&subscriptionStatus)
-	if err != nil {
-		return "", fmt.Errorf("failed to check subscription status: %w", err)
+// SubscriptionStatus returns user's subscription status.
+func (d *Database) SubscriptionStatus(ctx context.Context, username string) (string, error) {
+	var status string
+	if err := d.db.QueryRowContext(ctx, userSubscriptionStatusSQL, username).Scan(&status); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", sql.ErrNoRows
+		}
+		return "", fmt.Errorf("subscription status query: %w", err)
 	}
-	log.Printf("User: %s, status: %v", username, subscriptionStatus)
-	return subscriptionStatus, nil
+	return status, nil
 }
 
-// UpdateUserTraffic changes the user's traffic value
-func (db *Database) UpdateUserTraffic(ctx context.Context, username string, traffic float64) error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
-	log.Printf("Updating traffic for user: %s", username)
-
-	stmt, err := db.DB.PrepareContext(ctx, updateUserTrafficSQL)
-	if err != nil {
-		return fmt.Errorf("failed to prepare update statement: %w", err)
+// UpdateUserTraffic sets traffic value for a user.
+func (d *Database) UpdateUserTraffic(ctx context.Context, username string, traffic float64) error {
+	if username == "" {
+		return errors.New("username is required")
 	}
-	defer stmt.Close()
-
-	_, err = stmt.ExecContext(ctx, traffic, username)
+	_, err := d.db.ExecContext(ctx, updateUserTrafficSQL, traffic, username)
 	if err != nil {
-		return fmt.Errorf("failed to execute update statement: %w", err)
+		return fmt.Errorf("update traffic: %w", err)
 	}
-
-	log.Printf("Traffic for user %s updated successfully.", username)
 	return nil
 }
 
-// ResetUserTraffic resets the traffic for a user
-func (db *Database) ResetUserTraffic(ctx context.Context, username string) error {
-	return db.UpdateUserTraffic(ctx, username, 0)
+// ResetUserTraffic resets traffic to 0.
+func (d *Database) ResetUserTraffic(ctx context.Context, username string) error {
+	return d.UpdateUserTraffic(ctx, username, 0)
 }
 
-// AllUsername return all username
-func (db *Database) AllUsername(ctx context.Context) ([]string, error) {
-	rows, err := db.DB.QueryContext(ctx, allUsername)
+// AllUsernames returns all usernames.
+func (d *Database) AllUsernames(ctx context.Context) ([]string, error) {
+	rows, err := d.db.QueryContext(ctx, allUsernamesSQL)
 	if err != nil {
-		return nil, fmt.Errorf("failed to execute query: %w", err)
+		return nil, fmt.Errorf("all usernames query: %w", err)
 	}
 	defer rows.Close()
 
-	var usernames []string
+	var names []string
 	for rows.Next() {
-		var username string
-		if err := rows.Scan(&username); err != nil {
-			return nil, fmt.Errorf("failed to scan row: %w", err)
+		var n string
+		if err := rows.Scan(&n); err != nil {
+			return nil, fmt.Errorf("scan username: %w", err)
 		}
-		usernames = append(usernames, username)
+		names = append(names, n)
 	}
-
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("row iteration error: %w", err)
+		return nil, fmt.Errorf("rows iteration: %w", err)
 	}
+	return names, nil
+}
 
-	return usernames, nil
+// Helper: default string if empty.
+func defaultString(s, def string) string {
+	if s == "" {
+		return def
+	}
+	return s
+}
+
+// Helper: nullableTime returns zero time as NOW if zero; but we pass time values directly to SQL.
+func nullableTime(t time.Time) interface{} {
+	if t.IsZero() {
+		return time.Now()
+	}
+	return t
 }

@@ -78,7 +78,7 @@ func (s *Scheduler) performSubscriptionCheck() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	usernames, err := s.Database.AllUsername(ctx)
+	usernames, err := s.Database.AllUsernames(ctx)
 	if err != nil {
 		log.Printf("Error getting usernames for subscription check: %v", err)
 		return
@@ -114,7 +114,7 @@ func (s *Scheduler) performTrafficReset() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	usernames, err := s.Database.AllUsername(ctx)
+	usernames, err := s.Database.AllUsernames(ctx)
 	if err != nil {
 		log.Printf("Error getting usernames for traffic reset: %v", err)
 		return

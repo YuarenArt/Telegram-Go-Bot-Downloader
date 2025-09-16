@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"youtube_downloader/pkg/downloader/youtube"
@@ -24,6 +25,13 @@ const (
 // YoutubeHandler is a service for downloading video from youtube
 type YoutubeHandler struct {
 	Downloader youtube.Downloader
+}
+
+// groupKey group formats by (height, container, type)
+type groupKey struct {
+	height    int
+	container string
+	fType     string
 }
 
 // NewYoutubeHandler return new YoutubeHandler
@@ -121,111 +129,192 @@ func normalizeYouTubeURL(raw string) (string, YouTubeType, error) {
 // getKeyboardVideoFormats builds keyboard by available formats
 func getKeyboardVideoFormats(formats []youtube.Format, url *string) (*tgbotapi.InlineKeyboardMarkup, error) {
 	if url == nil || *url == "" {
-		return nil, errors.New("URL cannot be nil or empty")
+		return nil, fmt.Errorf("URL cannot be nil or empty")
 	}
 	if len(formats) == 0 {
-		return nil, errors.New("no formats available")
+		return nil, fmt.Errorf("no formats available")
 	}
 
-	keyboard := tgbotapi.NewInlineKeyboardMarkup()
-
-	// Find best audio format for size estimation
-	audioSize := estimateAudioSize(formats)
-
-	for _, format := range formats {
-		// Skip WebM formats as they can cause issues
-		if strings.HasPrefix(format.MimeType, "audio/webm") || strings.HasPrefix(format.MimeType, "video/webm") {
+	// Step 1: filter out unwanted formats
+	candidates := make([]youtube.Format, 0, len(formats))
+	for _, f := range formats {
+		if f.FormatID == "" && f.Itag == 0 {
 			continue
 		}
-
-		formatType := determineFormatType(format)
-		itagNo := format.Itag
-		data := fmt.Sprintf("%s,%d", *url, itagNo)
-
-		size := estimateFormatSize(format, audioSize)
-
-		sign := buildFormatDescription(format, formatType, size)
-
-		button := tgbotapi.NewInlineKeyboardButtonData(strings.Join(sign, ", "), data)
-		keyboard.InlineKeyboard = append(keyboard.InlineKeyboard, []tgbotapi.InlineKeyboardButton{button})
+		lid := strings.ToLower(f.FormatID)
+		if strings.HasPrefix(lid, "sb") || strings.Contains(strings.ToLower(f.MimeType), "mhtml") || strings.Contains(strings.ToLower(f.MimeType), "storyboard") {
+			continue
+		}
+		mt := strings.ToLower(f.MimeType)
+		if strings.Contains(mt, "text/") || (strings.Contains(mt, "application/") && !strings.Contains(mt, "video") && !strings.Contains(mt, "audio")) {
+			continue
+		}
+		candidates = append(candidates, f)
+	}
+	if len(candidates) == 0 {
+		return nil, fmt.Errorf("no user-friendly formats available")
 	}
 
+	// Step 2: choose best per group
+	best := make(map[groupKey]youtube.Format)
+	for _, f := range candidates {
+		height := f.Height
+		if height == 0 {
+			height = parseHeightFromQuality(f.Quality)
+		}
+		container := f.Ext
+		if container == "" {
+			container = parseContainerFromMime(f.MimeType)
+		}
+		ftype := "video+audio"
+		if f.AudioOnly {
+			ftype = "audio"
+		} else if f.VideoOnly {
+			ftype = "video"
+		}
+		k := groupKey{height: height, container: strings.ToUpper(container), fType: ftype}
+		cur, ok := best[k]
+		if !ok || f.Bitrate > cur.Bitrate {
+			best[k] = f
+		}
+	}
+
+	// Step 3: build entries
+	type displayEntry struct {
+		Key      groupKey
+		Format   youtube.Format
+		Label    string
+		SizeMB   float64
+		SortRank int
+	}
+	entries := make([]displayEntry, 0, len(best))
+	for k, f := range best {
+		var size float64
+		if f.FileSize > 0 {
+			size = float64(f.FileSize) / 1024.0 / 1024.0
+		} else if f.FileSizeApprox > 0 {
+			size = float64(f.FileSizeApprox) / 1024.0 / 1024.0
+		} else {
+			size = estimateFormatSizeFromBitrate(f)
+		}
+		label := buildLabelForFormat(f, k.height, k.container, k.fType, size)
+		rank := rankForGroup(k)
+		entries = append(entries, displayEntry{
+			Key:      k,
+			Format:   f,
+			Label:    label,
+			SizeMB:   size,
+			SortRank: rank,
+		})
+	}
+
+	// Sort
+	sort.SliceStable(entries, func(i, j int) bool {
+		if entries[i].SortRank != entries[j].SortRank {
+			return entries[i].SortRank > entries[j].SortRank
+		}
+		return entries[i].SizeMB < entries[j].SizeMB
+	})
+
+	// Step 4: build keyboard
+	keyboard := tgbotapi.NewInlineKeyboardMarkup()
+	for _, e := range entries {
+		formID := e.Format.FormatID
+		if formID == "" {
+			formID = strconv.Itoa(e.Format.Itag)
+		}
+		data := fmt.Sprintf("%s,%s", *url, formID)
+		button := tgbotapi.NewInlineKeyboardButtonData(e.Label, data)
+		keyboard.InlineKeyboard = append(keyboard.InlineKeyboard, []tgbotapi.InlineKeyboardButton{button})
+	}
 	return &keyboard, nil
 }
 
-// estimateAudioSize estimates the size of audio track for video formats
-func estimateAudioSize(formats []youtube.Format) float64 {
-	for _, format := range formats {
-		if format.AudioOnly && format.Bitrate > 0 {
-			return float64(format.Bitrate) * DefaultDuration / BytesPerMB
+func parseHeightFromQuality(q string) int {
+	if q == "" {
+		return 0
+	}
+	q = strings.TrimSpace(q)
+	for i := 0; i < len(q); i++ {
+		if q[i] >= '0' && q[i] <= '9' {
+			j := i
+			for j < len(q) && q[j] >= '0' && q[j] <= '9' {
+				j++
+			}
+			if j < len(q) && (q[j] == 'p' || q[j] == 'P') {
+				if h, err := strconv.Atoi(q[i:j]); err == nil {
+					return h
+				}
+			}
+			if h, err := strconv.Atoi(q[i:j]); err == nil {
+				return h
+			}
+			break
 		}
 	}
-	return 0.0
+	return 0
 }
 
-// determineFormatType determines the type of format (Audio, Video, or Video+Audio)
-func determineFormatType(format youtube.Format) string {
-	if format.AudioOnly {
-		return "Audio"
-	} else if format.VideoOnly {
-		return "Video"
+func parseContainerFromMime(mime string) string {
+	if mime == "" {
+		return "unknown"
 	}
-	return "Video+Audio"
+	parts := strings.Split(mime, "/")
+	if len(parts) < 2 {
+		return strings.TrimSpace(mime)
+	}
+	rest := parts[1]
+	if idx := strings.Index(rest, ";"); idx >= 0 {
+		rest = rest[:idx]
+	}
+	return strings.TrimSpace(rest)
 }
 
-// estimateFormatSize estimates the file size for a given format
-func estimateFormatSize(format youtube.Format, audioSize float64) float64 {
-	size := 0.0
-	if format.Bitrate > 0 {
-		size = float64(format.Bitrate) * DefaultDuration / BytesPerMB
+func estimateFormatSizeFromBitrate(f youtube.Format) float64 {
+	if f.Bitrate <= 0 {
+		return 0.0
 	}
-
-	// Add audio size for video-only formats
-	if !format.AudioOnly && format.VideoOnly {
-		size += audioSize
-	}
-
-	return size
+	return float64(f.Bitrate) * DefaultDuration / BytesPerMB
 }
 
-// buildFormatDescription builds the description text for a format button
-func buildFormatDescription(format youtube.Format, formatType string, size float64) []string {
-	sign := []string{formatType}
+func buildLabelForFormat(f youtube.Format, height int, container string, fType string, size float64) string {
+	parts := make([]string, 0, 4)
 
-	if format.Quality != "" {
-		sign = append(sign, format.Quality)
+	if height > 0 {
+		parts = append(parts, fmt.Sprintf("%dp", height))
+	} else if f.Quality != "" {
+		parts = append(parts, f.Quality)
 	}
 
-	if format.VideoCodec != "" && !format.AudioOnly {
-		sign = append(sign, format.VideoCodec)
+	if container != "" && container != "unknown" {
+		parts = append(parts, strings.ToUpper(container))
 	}
 
-	if format.AudioCodec != "" && format.AudioOnly {
-		sign = append(sign, format.AudioCodec)
+	switch fType {
+	case "audio":
+		parts = append(parts, "Audio")
+	case "video":
+		parts = append(parts, "Video")
+	default:
+		parts = append(parts, "Video+Audio")
 	}
 
-	sign = append(sign, fmt.Sprintf("%.1f Mb", size))
+	if size > 0 {
+		parts = append(parts, fmt.Sprintf("%.1f Mb", size))
+	}
 
-	return sign
+	return strings.Join(parts, " ")
 }
 
-// getFileSizeGeneric estimates file size from metadata
-func getFileSizeGeneric(format map[string]any) (float64, error) {
-	if cl, ok := format["ContentLength"]; ok && cl.(int) > 0 {
-		return float64(cl.(int)), nil
+func rankForGroup(k groupKey) int {
+	rank := k.height
+	if k.fType == "audio" {
+		rank -= 1
+	} else if k.fType == "video" {
+		rank -= 2
 	}
-
-	duration, err := strconv.ParseFloat(fmt.Sprintf("%v", format["ApproxDurationMs"]), 64)
-	if err != nil {
-		return 0, err
+	if strings.ToLower(k.container) == "mp4" {
+		rank += 5
 	}
-	duration /= 1000
-
-	bitrate := format["Bitrate"].(int)
-	if ab, ok := format["AverageBitrate"]; ok && ab.(int) > 0 {
-		bitrate = ab.(int)
-	}
-
-	contentLength := float64(bitrate/8) * duration
-	return contentLength, nil
+	return rank
 }

@@ -5,12 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math"
 	"strconv"
+	"strings"
 	"time"
 	"youtube_downloader/pkg/downloader/youtube"
 )
 
-// MetadataParser handles parsing of youtube-dl JSON output into structured data.
+// MetadataParser handles parsing of yt-dlp JSON output into structured data.
 type MetadataParser struct{}
 
 // NewMetadataParser creates a new MetadataParser.
@@ -42,21 +44,31 @@ func (p *MetadataParser) ParseVideo(data []byte, sourceURL string) (*youtube.Vid
 		return nil, errors.New("invalid or missing video title")
 	}
 
-	durationMs, ok := videoData["duration"].(float64)
-	if !ok || durationMs <= 0 {
-		// Duration might be missing for some videos, use default
-		durationMs = 0
+	// duration in seconds (may be float)
+	var duration time.Duration
+	if durRaw, ok := videoData["duration"].(float64); ok && durRaw > 0 {
+		// keep fractional seconds accurate
+		duration = time.Duration(math.Round(durRaw*1000)) * time.Millisecond
+	} else {
+		duration = 0
 	}
 
 	formats, err := p.parseFormats(videoData["formats"])
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse formats: %w", err)
+		// don't fail completely if formats parsing failed; return video with zero formats for caller to decide
+		return &youtube.Video{
+			ID:        id,
+			Title:     title,
+			Duration:  duration,
+			Formats:   nil,
+			SourceURL: sourceURL,
+		}, fmt.Errorf("failed to parse formats: %w", err)
 	}
 
 	return &youtube.Video{
 		ID:        id,
 		Title:     title,
-		Duration:  time.Duration(durationMs) * time.Second,
+		Duration:  duration,
 		Formats:   formats,
 		SourceURL: sourceURL,
 	}, nil
@@ -169,39 +181,53 @@ func (p *MetadataParser) parseFormats(formatsData interface{}) ([]youtube.Format
 
 // parseSingleFormat parses a single format from the formats array
 func (p *MetadataParser) parseSingleFormat(formatData map[string]interface{}) (youtube.Format, error) {
-	itag, ok := formatData["format_id"].(string)
-	if !ok || itag == "" {
-		return youtube.Format{}, errors.New("invalid format_id")
+	var f youtube.Format
+
+	// format_id → строка
+	if raw, ok := formatData["format_id"]; ok {
+		f.FormatID = fmt.Sprintf("%v", raw)
 	}
 
-	itagInt, err := strconv.Atoi(itag)
-	if err != nil {
-		return youtube.Format{}, fmt.Errorf("invalid format_id format: %w", err)
+	// itag из format_id
+	if num := strings.TrimLeft(f.FormatID, "0123456789"); len(f.FormatID) > len(num) {
+		if v, err := strconv.Atoi(f.FormatID[:len(f.FormatID)-len(num)]); err == nil {
+			f.Itag = v
+		}
 	}
 
-	mimeType, _ := formatData["mime_type"].(string)
-	quality, _ := formatData["format_note"].(string)
-
-	var bitrate int
-	if bitrateRaw, ok := formatData["tbr"].(float64); ok {
-		bitrate = int(bitrateRaw)
+	if v, ok := formatData["ext"].(string); ok {
+		f.Ext = v
+	}
+	if v, ok := formatData["height"].(float64); ok {
+		f.Height = int(v)
+	}
+	if v, ok := formatData["width"].(float64); ok {
+		f.Width = int(v)
+	}
+	if v, ok := formatData["filesize"].(float64); ok {
+		f.FileSize = int64(v)
+	}
+	if v, ok := formatData["filesize_approx"].(float64); ok {
+		f.FileSizeApprox = int64(v)
+	}
+	if v, ok := formatData["mime_type"].(string); ok {
+		f.MimeType = v
+	}
+	if v, ok := formatData["format_note"].(string); ok {
+		f.Quality = v
+	}
+	if v, ok := formatData["tbr"].(float64); ok {
+		f.Bitrate = int(v)
+	}
+	if v, ok := formatData["acodec"].(string); ok {
+		f.AudioCodec = v
+	}
+	if v, ok := formatData["vcodec"].(string); ok {
+		f.VideoCodec = v
 	}
 
-	audioCodec, _ := formatData["acodec"].(string)
-	videoCodec, _ := formatData["vcodec"].(string)
+	f.AudioOnly = (f.AudioCodec != "" && f.AudioCodec != "none") && (f.VideoCodec == "" || f.VideoCodec == "none")
+	f.VideoOnly = (f.VideoCodec != "" && f.VideoCodec != "none") && (f.AudioCodec == "" || f.AudioCodec == "none")
 
-	// Determine format type
-	audioOnly := audioCodec != "" && videoCodec == "none"
-	videoOnly := videoCodec != "" && audioCodec == "none"
-
-	return youtube.Format{
-		Itag:       itagInt,
-		MimeType:   mimeType,
-		Quality:    quality,
-		Bitrate:    bitrate,
-		AudioOnly:  audioOnly,
-		VideoOnly:  videoOnly,
-		AudioCodec: audioCodec,
-		VideoCodec: videoCodec,
-	}, nil
+	return f, nil
 }

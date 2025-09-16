@@ -101,7 +101,7 @@ func (yh *YoutubeHandler) HandleCallbackQueryWithFormats(callbackQuery *tgbotapi
 	}
 
 	opts := youtube.DownloadOptions{
-		FormatID:  formatFile.Itag,
+		Format:    formatFile.FormatID,
 		AudioOnly: formatFile.AudioOnly,
 	}
 

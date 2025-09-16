@@ -67,7 +67,7 @@ func (yh *YoutubeHandler) processSingleVideoAudio(bot *tgbotapi.BotAPI, callback
 	}
 
 	opts := youtube.DownloadOptions{
-		FormatID:  audioFormat.Itag,
+		Format:    audioFormat.FormatID,
 		AudioOnly: true,
 	}
 
@@ -102,7 +102,7 @@ func (yh *YoutubeHandler) processSingleVideoVideo(bot *tgbotapi.BotAPI, callback
 	}
 
 	opts := youtube.DownloadOptions{
-		FormatID:  videoFormat.Itag,
+		Format:    videoFormat.FormatID,
 		AudioOnly: false,
 	}
 
