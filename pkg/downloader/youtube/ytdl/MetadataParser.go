@@ -7,7 +7,7 @@ import (
 	"log"
 	"strconv"
 	"time"
-	"youtube_downloader/internal/downloader/youtube"
+	"youtube_downloader/pkg/downloader/youtube"
 )
 
 // MetadataParser handles parsing of youtube-dl JSON output into structured data.

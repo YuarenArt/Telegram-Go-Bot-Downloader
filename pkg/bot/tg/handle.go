@@ -7,38 +7,56 @@ import (
 	"log"
 	"strings"
 	"time"
-	"youtube_downloader/internal/bot/tg/handler"
-	"youtube_downloader/internal/bot/tg/handler/youtube"
-	"youtube_downloader/internal/bot/tg/send"
-	database_client "youtube_downloader/internal/database-client"
+	"youtube_downloader/pkg/bot/tg/handler"
+	"youtube_downloader/pkg/bot/tg/handler/youtube"
+	"youtube_downloader/pkg/bot/tg/send"
+	database_client "youtube_downloader/pkg/database-client"
 )
 
 // handleUpdates gets updates from telegramAPI and handles it
 func (tb *TgBot) handleUpdates(updates tgbotapi.UpdatesChannel) {
-	for update := range updates {
-		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
-		defer cancel()
-
-		if err := tb.ensureUserExists(ctx, update.Message); err != nil {
-			log.Println(err)
-		}
-
-		switch {
-		case update.Message != nil && update.Message.SuccessfulPayment == nil:
-			if update.Message.IsCommand() {
-				tb.handleCommand(update.Message)
-				continue
+	for {
+		select {
+		case <-tb.ctx.Done():
+			return
+		case update, ok := <-updates:
+			if !ok {
+				return
 			}
-			tb.handleMessage(update.Message)
-		case update.CallbackQuery != nil:
-			tb.handleCallbackQuery(update.CallbackQuery)
-		case update.PreCheckoutQuery != nil:
-			tb.handlePreCheckoutQuery(update.PreCheckoutQuery)
-		case update.Message != nil && update.Message.SuccessfulPayment != nil:
-			tb.handleSuccessfulPayment(update.Message)
-		default:
-			log.Println("unknown user's message")
-			tb.handleDefaultCommand(update.Message, update.Message.From.LanguageCode)
+
+			tb.wg.Add(1)
+			go func(update tgbotapi.Update) {
+				defer tb.wg.Done()
+
+				ctx, cancel := context.WithTimeout(tb.ctx, 1*time.Minute)
+				defer cancel()
+
+				if update.Message != nil {
+					if err := tb.ensureUserExists(ctx, update.Message); err != nil {
+						log.Println(err)
+					}
+				}
+
+				switch {
+				case update.Message != nil && update.Message.SuccessfulPayment == nil:
+					if update.Message.IsCommand() {
+						tb.handleCommand(update.Message)
+						return
+					}
+					tb.handleMessage(update.Message)
+				case update.CallbackQuery != nil:
+					tb.handleCallbackQuery(update.CallbackQuery)
+				case update.PreCheckoutQuery != nil:
+					tb.handlePreCheckoutQuery(update.PreCheckoutQuery)
+				case update.Message != nil && update.Message.SuccessfulPayment != nil:
+					tb.handleSuccessfulPayment(update.Message)
+				default:
+					log.Println("unknown user's message")
+					if update.Message != nil && update.Message.From != nil {
+						tb.handleDefaultCommand(update.Message, update.Message.From.LanguageCode)
+					}
+				}
+			}(update)
 		}
 	}
 }

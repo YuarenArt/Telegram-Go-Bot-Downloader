@@ -4,8 +4,8 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"log"
 	"strings"
-	. "youtube_downloader/internal/bot/tg/handler"
-	"youtube_downloader/internal/bot/tg/send"
+	"youtube_downloader/pkg/bot/tg/handler"
+	"youtube_downloader/pkg/bot/tg/send"
 )
 
 // handleCallbackQuery gets url from Bot's message with a replying link,
@@ -22,7 +22,7 @@ func (tb *TgBot) handleCallbackQuery(callbackQuery *tgbotapi.CallbackQuery) {
 		tb.processPayment(callbackQuery.Message, subscriptionType)
 	case isYoutubeLink(data):
 		tr := tb.translations[lang]
-		tb.handlers[YoutubeHandler].HandleCallbackQuery(callbackQuery, tb.Bot, tb.Client, &tr)
+		tb.handlers[handler.YoutubeHandler].HandleCallbackQuery(callbackQuery, tb.Bot, tb.Client, &tr)
 	default:
 		log.Printf("handleCallbackQuery get default case with %s link", data)
 		somethingWentWrong := tb.translations[lang]["somethingWentWrong"]

@@ -1,16 +1,17 @@
 package tg
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
 	"os"
 	"path/filepath"
 	"sync"
-	"youtube_downloader/internal/bot/tg/handler"
-	_ "youtube_downloader/internal/database-client"
-	database_client "youtube_downloader/internal/database-client"
-	kkdaiDownloader "youtube_downloader/internal/downloader/youtube/ytdl"
+	"youtube_downloader/pkg/bot/tg/handler"
+	_ "youtube_downloader/pkg/database-client"
+	database_client "youtube_downloader/pkg/database-client"
+	kkdaiDownloader "youtube_downloader/pkg/downloader/youtube/ytdl"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
@@ -22,6 +23,9 @@ type TgBot struct {
 	handlers     []handler.Handler
 	Client       *database_client.Client
 	translations map[string]map[string]string
+	ctx          context.Context
+	cancel       context.CancelFunc
+	wg           sync.WaitGroup
 }
 
 var (
@@ -54,9 +58,12 @@ func (tb *TgBot) LoadTranslations() error {
 
 // NewBot initializes a new TgBot instance with the given Telegram Bot API instance.
 func newBot(bot *tgbotapi.BotAPI) *TgBot {
+	ctx, cancel := context.WithCancel(context.Background())
 	return &TgBot{
 		Bot:    bot,
 		Client: database_client.NewClient(bot.Token),
+		ctx:    ctx,
+		cancel: cancel,
 	}
 }
 
@@ -69,27 +76,31 @@ func BotInstance(bot *tgbotapi.BotAPI) *TgBot {
 	return instance
 }
 
-// StartBot starts the Bot by authorizing it and initiating the update handling process.
-func (tb *TgBot) StartBot() error {
+// Start starts the Bot by authorizing it and initiating the update handling process.
+func (tb *TgBot) Start() error {
 	log.Printf("Authorized on account %s", tb.Bot.Self.UserName)
 
-	// Load translations
 	if err := tb.LoadTranslations(); err != nil {
-		log.Fatal("Error loading translations:", err)
+		return fmt.Errorf("error loading translations: %w", err)
 	}
 
 	dir, err := os.Getwd()
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("error getting working directory: %w", err)
 	}
+
 	if err = clearDownloadDirs(dir); err != nil {
-		log.Println(err.Error())
+		log.Printf("Warning: error clearing download dirs: %v", err)
 	}
 
 	tb.initSupportedHandlers()
 
 	updates := tb.initUpdatesChannel()
-	tb.handleUpdates(updates)
+	tb.wg.Add(1)
+	go func() {
+		defer tb.wg.Done()
+		tb.handleUpdates(updates)
+	}()
 
 	return nil
 }
@@ -120,6 +131,14 @@ func (tb *TgBot) initUpdatesChannel() tgbotapi.UpdatesChannel {
 	update.Timeout = 60
 
 	return tb.Bot.GetUpdatesChan(update)
+}
+
+// Stop gracefully stops the bot and waits for all operations to complete
+func (tb *TgBot) Stop() {
+	if tb.cancel != nil {
+		tb.cancel()
+	}
+	tb.wg.Wait()
 }
 
 func clearDownloadDir() error {

@@ -8,7 +8,7 @@ import (
 	"log"
 	"os"
 	"time"
-	"youtube_downloader/internal/bot/tg/send"
+	"youtube_downloader/pkg/bot/tg/send"
 )
 
 const (

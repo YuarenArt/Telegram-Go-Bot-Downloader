@@ -8,10 +8,10 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"youtube_downloader/internal/bot/tg/send"
-	database_client "youtube_downloader/internal/database-client"
-	"youtube_downloader/internal/downloader/youtube"
+	"youtube_downloader/pkg/bot/tg/send"
+	database_client "youtube_downloader/pkg/database-client"
 	"youtube_downloader/pkg/database/models"
+	"youtube_downloader/pkg/downloader/youtube"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )

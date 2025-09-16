@@ -1,9 +1,9 @@
 package handler
 
 import (
-	"youtube_downloader/internal/bot/tg/handler/youtube"
-	database_client "youtube_downloader/internal/database-client"
-	downloader_youtube "youtube_downloader/internal/downloader/youtube"
+	"youtube_downloader/pkg/bot/tg/handler/youtube"
+	database_client "youtube_downloader/pkg/database-client"
+	downloader_youtube "youtube_downloader/pkg/downloader/youtube"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )

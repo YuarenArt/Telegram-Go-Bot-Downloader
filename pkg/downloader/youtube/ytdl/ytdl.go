@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"youtube_downloader/internal/downloader/youtube"
+	"youtube_downloader/pkg/downloader/youtube"
 )
 
 // YTDLBackend orchestrates video and playlist metadata retrieval and downloading.

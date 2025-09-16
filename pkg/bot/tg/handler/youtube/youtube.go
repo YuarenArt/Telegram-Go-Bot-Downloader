@@ -6,8 +6,8 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
-	"youtube_downloader/internal/downloader/youtube"
-	"youtube_downloader/internal/downloader/youtube/ytdl"
+	"youtube_downloader/pkg/downloader/youtube"
+	"youtube_downloader/pkg/downloader/youtube/ytdl"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )

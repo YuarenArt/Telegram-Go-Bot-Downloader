@@ -1,10 +1,70 @@
-.idea
-.bin
-env.example
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
 
-/download
-config.yaml
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+
+# Dependency directories (remove the comment below to include it)
+vendor/
+
+# Go workspace file
+go.work
+
+# IDE specific files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Local development files
+*.pem
+*.key
+*.crt
+
+# Build output
+/dist/
+/build/
+
+# Logs
+*.log
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Project specific
+/config.yaml
+/cert.pem
+/key.pem
+/downloads/
+
+# Go modules
 go.sum
 
-cert.pem
-key.pem
+# Binaries for programs and plugins
+.bin/
+
+# Local development
+.env.example
+
+# Text and data files
+*.txt
+*.prof

@@ -8,7 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"youtube_downloader/internal/downloader/youtube"
+	"youtube_downloader/pkg/downloader/youtube"
 )
 
 // CommandRunner executes external yt-dlp commands.

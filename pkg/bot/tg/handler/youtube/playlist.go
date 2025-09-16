@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"youtube_downloader/internal/downloader/youtube"
+	"youtube_downloader/pkg/downloader/youtube"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
