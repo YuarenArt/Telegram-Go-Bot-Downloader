@@ -14,11 +14,10 @@ type User struct {
 
 // Subscription represents a user's subscription
 type Subscription struct {
-	ID                 int64     `json:"id"`
-	SubscriptionStatus string    `json:"subscription_status"` // active, inactive
-	Duration           string    `json:"duration"`            // month, year, forever
-	StartSubscription  time.Time `json:"start_subscription"`
-	EndSubscription    time.Time `json:"end_subscription"`
-	CreatedAt          time.Time `json:"created_at"`
-	UpdatedAt          time.Time `json:"updated_at"`
+	ID                int64     `json:"id"`
+	Duration          string    `json:"duration"` // month, year, forever
+	StartSubscription time.Time `json:"start_subscription"`
+	EndSubscription   time.Time `json:"end_subscription"`
+	CreatedAt         time.Time `json:"created_at"`
+	UpdatedAt         time.Time `json:"updated_at"`
 }

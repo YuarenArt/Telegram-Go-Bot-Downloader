@@ -10,7 +10,6 @@ import (
 	"youtube_downloader/pkg/bot/tg/handler"
 	"youtube_downloader/pkg/bot/tg/handler/youtube"
 	"youtube_downloader/pkg/bot/tg/send"
-	database_client "youtube_downloader/pkg/database-client"
 )
 
 // handleUpdates gets updates from telegramAPI and handles it
@@ -113,25 +112,30 @@ func (tb *TgBot) handleMessage(message *tgbotapi.Message) {
 	}
 }
 
-// createUserIfNotExists checks if a user exists in the database and creates it if not.
+// ensureUserExists checks if a user exists in the database and creates it if not.
 func (tb *TgBot) ensureUserExists(ctx context.Context, message *tgbotapi.Message) error {
-
-	if message == nil {
-		log.Println("empty message while ensureUserExists")
-		return nil
+	if message == nil || message.From == nil {
+		log.Println("empty message or missing From field while ensureUserExists")
+		return fmt.Errorf("invalid message")
 	}
 
 	username := message.From.UserName
+	if username == "" {
+		return fmt.Errorf("username is required")
+	}
 
 	exist, err := tb.Client.IsUserExist(ctx, username)
 	if err != nil {
 		return fmt.Errorf("error checking if user exists: %w", err)
 	}
+
 	if !exist {
-		newUser := database_client.NewUser(username, message.Chat.ID)
-		if err := tb.Client.CreateUser(ctx, newUser); err != nil {
+		// Create user directly with username and chat ID
+		_, err := tb.Client.CreateUser(ctx, username, message.Chat.ID)
+		if err != nil {
 			return fmt.Errorf("error creating new user: %w", err)
 		}
+		log.Printf("Created new user: %s", username)
 	}
 	return nil
 }

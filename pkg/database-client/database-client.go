@@ -6,14 +6,16 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"os"
 	"time"
 
 	"github.com/joho/godotenv"
-
-	"net/http"
+	"youtube_downloader/internal/api/types"
 	"youtube_downloader/pkg/database/models"
 )
 
@@ -22,7 +24,6 @@ const (
 )
 
 var durations = [3]string{"month", "year", "forever"}
-var subscriptionStatus = [2]string{"inactive", "active"}
 
 // Client is a structure that contains the HTTP client and the base URL of the server.
 type Client struct {
@@ -78,102 +79,164 @@ func NewUser(username string, ChatID int64) *models.User {
 		Traffic:  0,
 		ChatID:   ChatID,
 		Subscription: models.Subscription{
-			StartSubscription:  time.Now(),
-			EndSubscription:    time.Now(),
-			SubscriptionStatus: subscriptionStatus[0],
-			Duration:           durations[0],
+			StartSubscription: time.Now(),
+			EndSubscription:   time.Now(),
+			Duration:          durations[0],
 		},
 	}
 }
 
 // CreateUser sends a request to create a new user.
-func (c *Client) CreateUser(ctx context.Context, newUser *models.User) error {
+func (c *Client) CreateUser(ctx context.Context, username string, chatID int64) (*types.UserResponse, error) {
 	url := fmt.Sprintf("%s/users", c.baseURL)
-	body, err := json.Marshal(newUser)
+
+	reqBody := types.UserRequest{
+		Username: username,
+		ChatID:   chatID,
+	}
+
+	body, err := json.Marshal(reqBody)
 	if err != nil {
-		return err
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(body))
 	if err != nil {
-		return err
+		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
+
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+c.token)
+	if c.token != "" {
+		req.Header.Set("Authorization", "Bearer "+c.token)
+	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return err
+		return nil, fmt.Errorf("request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusCreated {
-		return fmt.Errorf("failed to create user: status %d", resp.StatusCode)
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
 
-	return nil
+	switch resp.StatusCode {
+	case http.StatusCreated:
+		var userResp types.UserResponse
+		if err := json.Unmarshal(respBody, &userResp); err != nil {
+			return nil, fmt.Errorf("failed to parse response: %w", err)
+		}
+		return &userResp, nil
+
+	case http.StatusBadRequest, http.StatusConflict:
+		var errResp types.ErrorResponse
+		if err := json.Unmarshal(respBody, &errResp); err != nil {
+			return nil, fmt.Errorf("invalid error response: %w", err)
+		}
+		return nil, errors.New(errResp.Error)
+
+	default:
+		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
 }
 
 // GetUser sends a request to retrieve a user by username.
-func (c *Client) GetUser(ctx context.Context, username string) (*models.User, error) {
+func (c *Client) GetUser(ctx context.Context, username string) (*types.UserResponse, error) {
 	url := fmt.Sprintf("%s/users/%s", c.baseURL, username)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
+
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+c.token)
+	if c.token != "" {
+		req.Header.Set("Authorization", "Bearer "+c.token)
+	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %w", err)
+		return nil, fmt.Errorf("request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	switch resp.StatusCode {
+	case http.StatusOK:
+		var userResp types.UserResponse
+		if err := json.Unmarshal(respBody, &userResp); err != nil {
+			return nil, fmt.Errorf("failed to parse response: %w", err)
+		}
+		return &userResp, nil
+
+	case http.StatusNotFound:
+		return nil, fmt.Errorf("user not found")
+
+	case http.StatusBadRequest:
+		var errResp types.ErrorResponse
+		if err := json.Unmarshal(respBody, &errResp); err != nil {
+			return nil, fmt.Errorf("invalid error response: %w", err)
+		}
+		return nil, errors.New(errResp.Error)
+
+	default:
 		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
-
-	var retrievedUser models.User
-	if err := json.NewDecoder(resp.Body).Decode(&retrievedUser); err != nil {
-		return nil, fmt.Errorf("failed to decode response body: %w", err)
-	}
-
-	return &retrievedUser, nil
 }
 
 // GetSubscriptionStatus sends a request to retrieve a user's subscription status.
-func (c *Client) GetSubscriptionStatus(ctx context.Context, username string) (string, error) {
+func (c *Client) GetSubscriptionStatus(ctx context.Context, username string) (*types.SubscriptionResponse, error) {
 	url := fmt.Sprintf("%s/users/%s/subscription", c.baseURL, username)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return "", err
+		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
+
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+c.token)
+	if c.token != "" {
+		req.Header.Set("Authorization", "Bearer "+c.token)
+	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("failed to send request: %w", err)
+		return nil, fmt.Errorf("request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
 
-	// Decode the response body into a user struct
-	var subscriptionStatus string
-	if err := json.NewDecoder(resp.Body).Decode(&subscriptionStatus); err != nil {
-		return "", fmt.Errorf("failed to decode response body: %w", err)
-	}
+	switch resp.StatusCode {
+	case http.StatusOK:
+		var subResp types.SubscriptionResponse
+		if err := json.Unmarshal(respBody, &subResp); err != nil {
+			return nil, fmt.Errorf("failed to parse response: %w", err)
+		}
+		return &subResp, nil
 
-	return subscriptionStatus, nil
+	case http.StatusNotFound:
+		return nil, fmt.Errorf("user not found")
+
+	case http.StatusBadRequest:
+		var errResp types.ErrorResponse
+		if err := json.Unmarshal(respBody, &errResp); err != nil {
+			return nil, fmt.Errorf("invalid error response: %w", err)
+		}
+		return nil, errors.New(errResp.Error)
+
+	default:
+		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
 }
 
-// IsUserExist sends a request to check if a user exists.
 func (c *Client) IsUserExist(ctx context.Context, username string) (bool, error) {
 	url := fmt.Sprintf("%s/users/%s/exists", c.baseURL, username)
 
@@ -181,33 +244,41 @@ func (c *Client) IsUserExist(ctx context.Context, username string) (bool, error)
 	if err != nil {
 		return false, err
 	}
+
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+c.token)
+	if c.token != "" {
+		req.Header.Set("Authorization", "Bearer "+c.token)
+	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return false, fmt.Errorf("failed to send request: %w", err)
+		return false, fmt.Errorf("request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode == http.StatusOK {
+	switch resp.StatusCode {
+	case http.StatusOK:
 		return true, nil
-	}
-	if resp.StatusCode == http.StatusNotFound {
-		return false, nil
-	}
 
-	return false, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	case http.StatusNotFound:
+		return false, nil
+
+	default:
+		return false, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
 }
 
 // UpdateTraffic sends a request to update a user's traffic.
-func (c *Client) UpdateTraffic(ctx context.Context, username string, traffic float64) error {
-
+func (c *Client) UpdateTraffic(ctx context.Context, username string, traffic int64) error {
 	url := fmt.Sprintf("%s/users/%s/traffic", c.baseURL, username)
 
-	body, err := json.Marshal(traffic)
+	trafficUpdate := types.TrafficUpdateRequest{
+		Traffic: traffic,
+	}
+
+	body, err := json.Marshal(trafficUpdate)
 	if err != nil {
-		return fmt.Errorf("failed to marshal traffic: %w", err)
+		return fmt.Errorf("failed to marshal request: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewBuffer(body))
@@ -216,18 +287,38 @@ func (c *Client) UpdateTraffic(ctx context.Context, username string, traffic flo
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+c.token)
+	if c.token != "" {
+		req.Header.Set("Authorization", "Bearer "+c.token)
+	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return err
+		return fmt.Errorf("request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("failed to update user's traffic: status %d", resp.StatusCode)
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response body: %w", err)
 	}
-	return nil
+
+	switch resp.StatusCode {
+	case http.StatusOK:
+		return nil
+
+	case http.StatusNotFound:
+		return fmt.Errorf("user not found")
+
+	case http.StatusBadRequest:
+		var errResp types.ErrorResponse
+		if err := json.Unmarshal(respBody, &errResp); err != nil {
+			return fmt.Errorf("invalid error response: %w", err)
+		}
+		return errors.New(errResp.Error)
+
+	default:
+		return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
 }
 
 func (c *Client) UpdateSubscription(ctx context.Context, user *models.User) error {

@@ -39,4 +39,7 @@ docker-up:
 docker-down:
 	docker-compose down
 
+swagger-db-api:
+	swag init -g cmd/user-database/main.go -o docs/api
+
 .PHONY: all build build-telegram-bot build-user-database run-telegram-bot run-user-database clean test lint docker-build docker-up docker-down

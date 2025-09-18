@@ -13,7 +13,6 @@ import (
 
 	"youtube_downloader/internal/api/handler"
 	"youtube_downloader/internal/config"
-	"youtube_downloader/internal/scheduler"
 	"youtube_downloader/pkg/database"
 	dbrepo "youtube_downloader/pkg/database/repository"
 )
@@ -65,15 +64,10 @@ func main() {
 		}
 	}()
 
-	// Scheduler uses database instance (assumed to be safe for concurrent use).
-	sched := scheduler.NewScheduler(db)
-	sched.Start()
-	defer sched.Stop()
-
 	// TLS certs (if absent, we start plain HTTP but log it explicitly).
 	certFile := "cert.pem"
 	keyFile := "key.pem"
-	useTLS := false // fileExists(certFile) && fileExists(keyFile)
+	useTLS := fileExists(certFile) && fileExists(keyFile)
 	if !useTLS {
 		log.Println("TLS certificates not found; starting HTTP (non-TLS). In production provide cert.pem and key.pem.")
 	}

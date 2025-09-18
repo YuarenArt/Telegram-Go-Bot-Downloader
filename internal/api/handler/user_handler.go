@@ -2,11 +2,13 @@ package handler
 
 import (
 	"context"
+	"errors"
 	"log"
 	"net/http"
 	"time"
 
-	_ "youtube_downloader/docs"
+	_ "youtube_downloader/docs/api"
+	"youtube_downloader/internal/api/types"
 	"youtube_downloader/pkg/database/models"
 	"youtube_downloader/pkg/database/repository"
 
@@ -47,29 +49,62 @@ func (h *Handler) setupRoutes() {
 }
 
 // CreateUser handles POST /users
-// @Summary      Create new user
-// @Description  Create a new user with username, subscription, and traffic fields
+// @Summary      Create a new user
+// @Description  Creates a new user with the specified username and chat ID
 // @Tags         users
 // @Accept       json
 // @Produce      json
-// @Param        user  body      models.User  true  "User data"
-// @Success      201   {object}  map[string]string
-// @Failure      400   {object}  map[string]string
-// @Failure      500   {object}  map[string]string
+// @Param        request  body      types.UserRequest  true  "User creation request"
+// @Success      201  {object}  types.UserResponse
+// @Failure      400  {object}  types.ErrorResponse
+// @Failure      409  {object}  types.ErrorResponse
+// @Failure      500  {object}  types.ErrorResponse
 // @Router       /users [post]
 func (h *Handler) CreateUser(c *gin.Context) {
-	var user models.User
-	if err := c.ShouldBindJSON(&user); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	var req types.UserRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, types.ErrorResponse{Error: "invalid request body"})
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	if req.Username == "" {
+		c.JSON(http.StatusBadRequest, types.ErrorResponse{Error: "username is required"})
+		return
+	}
+
+	if req.ChatID == 0 {
+		c.JSON(http.StatusBadRequest, types.ErrorResponse{Error: "chat_id is required"})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancel()
 
+	// Check if user already exists
+	exists, err := h.Database.IsUserExists(ctx, req.Username)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, types.ErrorResponse{Error: "failed to check user existence"})
+		return
+	}
+	if exists {
+		c.JSON(http.StatusConflict, types.ErrorResponse{Error: "user already exists"})
+		return
+	}
+
+	// Create new user with default values
+	user := models.User{
+		Username: req.Username,
+		ChatID:   req.ChatID,
+		Traffic:  0,
+		Subscription: models.Subscription{
+			StartSubscription: time.Now(),
+			EndSubscription:   time.Now().AddDate(0, 0, 0), // 1 month by default
+			Duration:          "month",
+		},
+	}
+
 	if err := h.Database.CreateUser(ctx, &user); err != nil {
-		log.Printf("Error creating user: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create user"})
+		c.JSON(http.StatusInternalServerError, types.ErrorResponse{Error: "failed to create user"})
 		return
 	}
 	c.JSON(http.StatusCreated, gin.H{"message": "user created"})
@@ -98,7 +133,7 @@ func (h *Handler) GetUser(c *gin.Context) {
 
 	user, err := h.Database.User(ctx, username)
 	if err != nil {
-		if err == sqlErrNoRows(err) {
+		if errors.Is(err, sqlErrNoRows(err)) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
 			return
 		}
@@ -138,7 +173,7 @@ func (h *Handler) UpdateUser(c *gin.Context) {
 	defer cancel()
 
 	if err := h.Database.UpdateUserSubscription(ctx, username, payload.Subscription); err != nil {
-		if err == sqlErrNoRows(err) {
+		if errors.Is(err, sqlErrNoRows(err)) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
 			return
 		}
@@ -227,7 +262,7 @@ func (h *Handler) GetSubscriptionStatus(c *gin.Context) {
 
 	status, err := h.Database.SubscriptionStatus(ctx, username)
 	if err != nil {
-		if err == sqlErrNoRows(err) {
+		if errors.Is(err, sqlErrNoRows(err)) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
 			return
 		}

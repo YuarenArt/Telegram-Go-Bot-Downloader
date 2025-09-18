@@ -16,9 +16,10 @@ type YTDLBackend struct {
 }
 
 // NewYTDLBackend creates a new YTDLBackend with CommandExecutor and MetadataParser.
-func NewYTDLBackend() *YTDLBackend {
+// cookiesPath is optional. If empty, cookies will not be used.
+func NewYTDLBackend(cookiesPath string) *YTDLBackend {
 	return &YTDLBackend{
-		executor: NewCommandExecutor(NewCommandRunner()),
+		executor: NewCommandExecutor(NewCommandRunner(), cookiesPath),
 		parser:   NewMetadataParser(),
 	}
 }

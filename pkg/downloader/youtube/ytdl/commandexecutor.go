@@ -88,32 +88,51 @@ func sanitizeJSONOutput(b []byte) []byte {
 
 // CommandExecutor handles execution of yt-dlp commands.
 type CommandExecutor struct {
-	client *CommandRunner
+	client      *CommandRunner
+	cookiesPath string
 }
 
 // NewCommandExecutor creates a new CommandExecutor.
-func NewCommandExecutor(runner *CommandRunner) *CommandExecutor {
+// If runner is nil, a new CommandRunner will be created.
+// cookiesPath is optional. If empty, cookies will not be used.
+func NewCommandExecutor(runner *CommandRunner, cookiesPath string) *CommandExecutor {
 	if runner == nil {
 		runner = NewCommandRunner()
 	}
-	return &CommandExecutor{client: runner}
+	return &CommandExecutor{
+		client:      runner,
+		cookiesPath: cookiesPath,
+	}
 }
 
 // validateCookiesFile checks if cookies file exists and logs appropriate messages
 func (e *CommandExecutor) validateCookiesFile() {
-	if _, err := os.Stat("cookies.txt"); os.IsNotExist(err) {
-		log.Printf("[yt-dlp] WARNING: cookies.txt file not found!")
+	if e.cookiesPath == "" {
+		log.Println("[yt-dlp] INFO: No cookies path specified, running without cookies")
+		return
+	}
+
+	if _, err := os.Stat(e.cookiesPath); os.IsNotExist(err) {
+		log.Printf("[yt-dlp] WARNING: cookies.txt file not found at %s", e.cookiesPath)
 	} else {
-		log.Printf("[yt-dlp] cookies.txt file found and will be used")
+		log.Printf("[yt-dlp] Using cookies file from %s", e.cookiesPath)
 	}
 }
 
 // buildBaseArgs creates common arguments for yt-dlp commands
 func (e *CommandExecutor) buildBaseArgs() []string {
-	return []string{
-		"--cookies", "cookies.txt",
+	args := []string{
 		"--no-check-certificates",
 	}
+
+	// Only add cookies flag if path is specified and file exists
+	if e.cookiesPath != "" {
+		if _, err := os.Stat(e.cookiesPath); err == nil {
+			args = append(args, "--cookies", e.cookiesPath)
+		}
+	}
+
+	return args
 }
 
 // RunVideoMetadata executes yt-dlp --dump-json to get video metadata.
@@ -124,9 +143,9 @@ func (e *CommandExecutor) RunVideoMetadata(ctx context.Context, videoURL string)
 
 	e.validateCookiesFile()
 
-	// Add --no-progress and --no-warnings if you want to reduce noise from yt-dlp itself;
+	// Add --no-warnings if you want to reduce noise from yt-dlp itself;
 	// we still capture stderr for debugging.
-	args := append(e.buildBaseArgs(), "--no-progress", "--dump-json", videoURL)
+	args := append(e.buildBaseArgs(), "--dump-json", videoURL)
 	log.Printf("[yt-dlp] Getting video metadata for: %s", videoURL)
 
 	output, err := e.client.Run(ctx, "yt-dlp", args...)
@@ -146,7 +165,6 @@ func (e *CommandExecutor) RunPlaylistMetadata(ctx context.Context, playlistURL s
 	e.validateCookiesFile()
 
 	args := append(e.buildBaseArgs(),
-		"--no-progress",
 		"--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.101 Safari/537.36",
 		"--dump-single-json", playlistURL,
 	)
@@ -178,7 +196,6 @@ func (e *CommandExecutor) RunDownload(ctx context.Context, videoURL string, opts
 	args := e.buildBaseArgs()
 	args = append(args,
 		"--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.101 Safari/537.36",
-		"--no-progress",
 	)
 
 	// If a format string is provided, pass it to yt-dlp using -f

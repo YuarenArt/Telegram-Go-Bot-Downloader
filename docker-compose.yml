@@ -1,12 +1,13 @@
-version: '3.7'
+
+version: '3.8'
 
 services:
   telegram-bot-api:
     image: aiogram/telegram-bot-api:latest
     container_name: telegram-bot-api-local
     environment:
-      TELEGRAM_API_ID: 23608845
-      TELEGRAM_API_HASH: cc16b480d848a43a44e73aa24c41f254
+      TELEGRAM_API_ID: ${TELEGRAM_API_ID}
+      TELEGRAM_API_HASH: ${TELEGRAM_API_HASH}
     volumes:
       - telegram-bot-api-data:/var/lib/telegram-bot-api
     ports:
@@ -16,7 +17,7 @@ services:
     image: postgres:latest
     environment:
       POSTGRES_USER: ${DB_USER:-postgres}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-1413210131}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: ${DB_NAME:-users}
     ports:
       - "5432:5432"
@@ -24,41 +25,67 @@ services:
       - postgres_data:/var/lib/postgresql/data
 
   user-database:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.user-database
     container_name: user-database
     depends_on:
       - db
     ports:
-      - "8082:8082"
+      - "${USER_DATABASE_PORT:-8082}:8082"
     environment:
+      - DB_HOST=db
+      - DB_PORT=5432
       - DB_USER=${DB_USER:-postgres}
-      - DB_PASSWORD=${DB_PASSWORD:-1413210131}
+      - DB_PASSWORD=${DB_PASSWORD}
       - DB_NAME=${DB_NAME:-users}
       - DB_SSLMODE=${DB_SSLMODE:-disable}
-      - HOST=db
-      - PORT=5432
+      - PORT=8082
     volumes:
-      - ./cert.pem:/root/cert.pem
-      - ./key.pem:/root/key.pem
-    command: ["./user-database"]
+      - user_database_data:/root
+      - ./.env:/root/.env
+    healthcheck:
+      test: ["CMD", "wget", "--no-check-certificate", "--spider", "https://localhost:8082/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
 
   telegram-bot:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.telegram-bot
     container_name: telegram-bot
-    environment:
-      - HOST=telegram-bot-api:8081
-      - PROVIDER_TOKEN=381764678:TEST:92774
-      - DB_URL=https://user-database:8082
-      - TELEGRAM_BOT_TOKEN=6979900763:AAFH_B1QpdIJXA87LXTRqwvhxgji8LAm9g4
-    volumes:
-      - .:/usr/src/telegram-bot
     depends_on:
       - telegram-bot-api
       - user-database
     ports:
-      - "8080:8080"
-    command: ["./telegram-bot"]
+      - "${TELEGRAM_BOT_PORT:-8080}:8080"
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - USER_DATABASE_URL=http://user-database:8082
+      - PORT=8080
+      - COOKIES_PATH=/root/cookies.txt
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME:-users}
+      - DB_SSLMODE=${DB_SSLMODE:-disable}
+    volumes:
+      - ./download:/root/download
+      - ./cookies.txt:/root/cookies.txt
+      - ./.env:/root/.env
+    healthcheck:
+      test: ["CMD", "wget", "--no-check-certificate", "--spider", "https://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
 
 volumes:
-  telegram-bot-api-data:
   postgres_data:
+  telegram-bot-api-data:
+  user_database_data:

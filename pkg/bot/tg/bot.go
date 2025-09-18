@@ -23,6 +23,7 @@ type TgBot struct {
 	handlers     []handler.Handler
 	Client       *database_client.Client
 	translations map[string]map[string]string
+	cookiesPath  string
 	ctx          context.Context
 	cancel       context.CancelFunc
 	wg           sync.WaitGroup
@@ -56,22 +57,31 @@ func (tb *TgBot) LoadTranslations() error {
 	return nil
 }
 
-// NewBot initializes a new TgBot instance with the given Telegram Bot API instance.
-func newBot(bot *tgbotapi.BotAPI) *TgBot {
+// newBot initializes a new TgBot instance with the given Telegram Bot API instance.
+func newBot(bot *tgbotapi.BotAPI, cookiesPath, dbToken string) *TgBot {
 	ctx, cancel := context.WithCancel(context.Background())
+
+	// Initialize database client
+	dbClient := database_client.NewClient(dbToken)
+
 	return &TgBot{
-		Bot:    bot,
-		Client: database_client.NewClient(bot.Token),
-		ctx:    ctx,
-		cancel: cancel,
+		Bot:          bot,
+		handlers:     make([]handler.Handler, 0),
+		Client:       dbClient,
+		translations: make(map[string]map[string]string),
+		cookiesPath:  cookiesPath,
+		ctx:          ctx,
+		cancel:       cancel,
 	}
 }
 
 // BotInstance returns the singleton instance of TgBot.
 // If the instance does not exist, it initializes it.
-func BotInstance(bot *tgbotapi.BotAPI) *TgBot {
+// cookiesPath is optional. If empty, cookies will not be used.
+// dbToken is required for database operations.
+func BotInstance(bot *tgbotapi.BotAPI, cookiesPath, dbToken string) *TgBot {
 	once.Do(func() {
-		instance = newBot(bot)
+		instance = newBot(bot, cookiesPath, dbToken)
 	})
 	return instance
 }
@@ -112,8 +122,8 @@ func (tb *TgBot) initSupportedHandlers() {
 		var h handler.Handler
 		switch handlerType {
 		case handler.YoutubeHandler:
-			ytDownloader := kkdaiDownloader.NewYTDLBackend()
-			h = handler.CreateHandler(handlerType, ytDownloader)
+			ytDownloader := kkdaiDownloader.NewYTDLBackend(tb.cookiesPath)
+			h = handler.CreateHandler(handlerType, ytDownloader, tb.Client, tb.cookiesPath)
 		}
 		tb.registerHandler(&h)
 	}

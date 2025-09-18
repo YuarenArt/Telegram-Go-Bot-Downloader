@@ -24,7 +24,6 @@ type TgBotApp struct {
 
 // NewApp initializes the application with configuration, bot, and context.
 func NewApp(cfg *config.Config) (*TgBotApp, error) {
-
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	botAPI, err := createBotAPI(cfg)
 	if err != nil {
@@ -32,7 +31,8 @@ func NewApp(cfg *config.Config) (*TgBotApp, error) {
 		return nil, fmt.Errorf("failed to create bot API: %w", err)
 	}
 
-	tgBot := tg.BotInstance(botAPI)
+	// Initialize bot with cookies path and database token
+	tgBot := tg.BotInstance(botAPI, cfg.CookiesPath, cfg.DatabaseToken)
 	tgBot.SetCommands()
 
 	return &TgBotApp{

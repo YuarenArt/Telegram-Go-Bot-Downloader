@@ -21,16 +21,18 @@ type Config struct {
 	// Telegram bot configuration
 	TelegramBotToken string
 	APIEndpoint      string
+	CookiesPath      string `yaml:"cookies_path" env:"COOKIES_PATH"`
 
 	// Database configuration
-	DBHost       string
-	DBPort       string
-	DBUser       string
-	DBPassword   string
-	DBName       string
-	DBSSLMode    string
-	MaxOpenConns int
-	MaxIdleConns int
+	DBHost        string
+	DBPort        string
+	DBUser        string
+	DBPassword    string
+	DBName        string
+	DBSSLMode     string
+	DatabaseToken string `yaml:"database_token" env:"DATABASE_TOKEN"`
+	MaxOpenConns  int
+	MaxIdleConns  int
 }
 
 var (
@@ -76,18 +78,20 @@ func NewConfig() *Config {
 			ShutdownTimeout: configValue("SHUTDOWN_TIMEOUT", "shutdown-timeout", "30", "Graceful shutdown timeout in seconds"),
 
 			// Telegram bot configuration
-			TelegramBotToken: configValue("TELEGRAM_BOT_TOKEN", "telegram-token", "", "Telegram bot token"),
-			APIEndpoint:      configValue("API_ENDPOINT", "api-endpoint", "", "Custom API endpoint"),
+			TelegramBotToken: configValue("TELEGRAM_BOT_TOKEN", "telegram-bot-token", "", "Telegram Bot API token"),
+			APIEndpoint:      configValue("TELEGRAM_API_ENDPOINT", "api-endpoint", "", "Custom Telegram API endpoint (optional)"),
+			CookiesPath:      configValue("COOKIES_PATH", "cookies-path", "cookies.txt", "Path to cookies.txt file for yt-dlp (optional)"),
 
 			// Database configuration
-			DBHost:       configValue("DB_HOST", "db-host", "localhost", "Database host"),
-			DBPort:       configValue("DB_PORT", "db-port", "5432", "Database port"),
-			DBUser:       configValue("DB_USER", "db-user", "postgres", "Database user"),
-			DBPassword:   configValue("DB_PASSWORD", "db-password", "yourpassword", "Database password"),
-			DBName:       configValue("DB_NAME", "db-name", "users", "Database name"),
-			DBSSLMode:    configValue("DB_SSLMODE", "db-sslmode", "disable", "Database SSL mode"),
-			MaxOpenConns: getIntConfigValue("DB_MAX_OPEN_CONNS", "db-max-open-conns", 25, "Maximum number of open connections to the database"),
-			MaxIdleConns: getIntConfigValue("DB_MAX_IDLE_CONNS", "db-max-idle-conns", 5, "Maximum number of idle connections in the connection pool"),
+			DBHost:        configValue("DB_HOST", "db-host", "localhost", "Database host"),
+			DBPort:        configValue("DB_PORT", "db-port", "5432", "Database port"),
+			DBUser:        configValue("DB_USER", "db-user", "postgres", "Database user"),
+			DBPassword:    configValue("DB_PASSWORD", "db-password", "postgres", "Database password"),
+			DBName:        configValue("DB_NAME", "db-name", "youtube_downloader", "Database name"),
+			DBSSLMode:     configValue("DB_SSLMODE", "db-sslmode", "disable", "Database SSL mode"),
+			DatabaseToken: configValue("DATABASE_TOKEN", "database-token", "", "Database access token"),
+			MaxOpenConns:  getIntConfigValue("DB_MAX_OPEN_CONNS", "db-max-open-conns", 25, "Maximum number of open connections to the database"),
+			MaxIdleConns:  getIntConfigValue("DB_MAX_IDLE_CONNS", "db-max-idle-conns", 25, "Maximum number of idle connections in the connection pool"),
 		}
 	})
 
@@ -115,20 +119,24 @@ func configValue(envVar, flagName, defaultValue, description string) string {
 
 // getIntConfigValue returns an integer configuration value using the same priority as configValue
 func getIntConfigValue(envVar, flagName string, defaultValue int, description string) int {
-	// Check environment variable first
-	if envValue := os.Getenv(envVar); envValue != "" {
-		if intValue, err := strconv.Atoi(envValue); err == nil {
-			return intValue
+	// First check environment variables
+	if val, exists := os.LookupEnv(envVar); exists {
+		if intVal, err := strconv.Atoi(val); err == nil {
+			return intVal
 		}
 	}
 
-	// Then check command-line flag
-	if f := flag.Lookup(flagName); f != nil {
-		if intValue, ok := f.Value.(flag.Getter).Get().(int); ok {
-			return intValue
-		}
+	// Then check command line flags
+	if !parsed {
+		flag.Parse()
+		parsed = true
 	}
 
-	// Return default value if neither is set or conversion fails
+	// If flag was provided, return its value
+	if flag.Lookup(flagName) != nil && flag.Lookup(flagName).Value.String() != "" {
+		return flag.Lookup(flagName).Value.(flag.Getter).Get().(int)
+	}
+
+	// Otherwise return the default value
 	return defaultValue
 }

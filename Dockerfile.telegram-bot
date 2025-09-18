@@ -38,6 +38,11 @@ COPY cmd/locales cmd/locales
 # Copy environment file (will be overridden by docker-compose)
 COPY .env .
 
+# Create a directory for cookies and ensure it's writable
+RUN mkdir -p /etc/youtube-dl && \
+    touch /etc/youtube-dl/cookies.txt && \
+    chmod 666 /etc/youtube-dl/cookies.txt
+
 # Expose the port the app runs on
 EXPOSE 8080/tcp
 

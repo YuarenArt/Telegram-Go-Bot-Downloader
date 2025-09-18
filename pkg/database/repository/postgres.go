@@ -102,8 +102,7 @@ func (d *Database) initSchema(ctx context.Context) error {
 		createTableUsers,
 		createUserChatIDIdx,
 		createUserSubscriptionIDIdx,
-		createSubscriptionStatusIdx,
-		createSubscriptionDatesIdx,
+		createSubscriptionEndIdx,
 	}
 	for _, s := range statements {
 		if _, err := d.db.ExecContext(ctx, s); err != nil {
@@ -122,30 +121,31 @@ func (d *Database) CreateUser(ctx context.Context, user *models.User) error {
 	if user.Username == "" {
 		return errors.New("username is required")
 	}
-
-	// Use transaction so that subscription and user insertion is atomic.
-	tx, err := d.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
-	if err != nil {
-		return fmt.Errorf("begin tx: %w", err)
-	}
-	defer func() {
-		// Ensure tx rollback if not committed.
-		_ = tx.Rollback()
-	}()
-
-	// Insert subscription and return id.
-	var subscriptionID int64
-	// If user.Subscription has Start/End zero, set defaults.
+	// validate subscription dates
 	start := user.Subscription.StartSubscription
 	if start.IsZero() {
-		start = time.Now()
+		start = time.Now().UTC()
 	}
 	end := user.Subscription.EndSubscription
 	if end.IsZero() {
 		end = start.AddDate(0, 1, 0) // default 1 month
 	}
+	if !end.After(start) {
+		return errors.New("end_subscription must be after start_subscription")
+	}
+
+	tx, err := d.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer func() {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Printf("tx rollback error: %v", err)
+		}
+	}()
+
+	var subscriptionID int64
 	if err := tx.QueryRowContext(ctx, insertSubscriptionSQL,
-		defaultString(user.Subscription.SubscriptionStatus, "inactive"),
 		defaultString(user.Subscription.Duration, "month"),
 		start,
 		end,
@@ -153,15 +153,20 @@ func (d *Database) CreateUser(ctx context.Context, user *models.User) error {
 		return fmt.Errorf("insert subscription: %w", err)
 	}
 
-	// Insert user
-	if _, err := tx.ExecContext(ctx, insertUserSQL, user.Username, subscriptionID, user.ChatID); err != nil {
+	// try to insert user and detect conflict
+	var insertedUsername string
+	err = tx.QueryRowContext(ctx, insertUserSQL, user.Username, subscriptionID, user.ChatID).Scan(&insertedUsername)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			// ON CONFLICT DO NOTHING returned no row -> conflict happened
+			return fmt.Errorf("username %s already exists", user.Username)
+		}
 		return fmt.Errorf("insert user: %w", err)
 	}
 
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit transaction: %w", err)
 	}
-
 	return nil
 }
 
@@ -182,7 +187,6 @@ func (d *Database) User(ctx context.Context, username string) (*models.User, err
 		&u.CreatedAt,
 		&u.UpdatedAt,
 		&s.ID,
-		&s.SubscriptionStatus,
 		&s.Duration,
 		&s.StartSubscription,
 		&s.EndSubscription,
@@ -216,7 +220,6 @@ func (d *Database) UpdateUserSubscription(ctx context.Context, username string, 
 
 	// Execute update (affects subscription linked to user)
 	res, err := d.db.ExecContext(ctx, updateSubscriptionByUsernameSQL,
-		defaultString(newSub.SubscriptionStatus, "inactive"),
 		defaultString(newSub.Duration, "month"),
 		nullableTime(newSub.StartSubscription),
 		nullableTime(newSub.EndSubscription),
@@ -303,6 +306,20 @@ func (d *Database) AllUsernames(ctx context.Context) ([]string, error) {
 		return nil, fmt.Errorf("rows iteration: %w", err)
 	}
 	return names, nil
+}
+
+func (d *Database) IsSubscriptionActive(ctx context.Context, username string) (bool, error) {
+	if username == "" {
+		return false, errors.New("username is required")
+	}
+	var active sql.NullBool
+	if err := d.db.QueryRowContext(ctx, userSubscriptionActiveSQL, username).Scan(&active); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, sql.ErrNoRows
+		}
+		return false, fmt.Errorf("subscription active query: %w", err)
+	}
+	return active.Valid && active.Bool, nil
 }
 
 // Helper: default string if empty.

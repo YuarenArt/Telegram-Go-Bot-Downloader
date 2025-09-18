@@ -3,6 +3,7 @@ package database
 import (
 	"fmt"
 	"net/url"
+	"os"
 )
 
 // Config holds the database configuration parameters
@@ -15,6 +16,20 @@ type Config struct {
 	SSLMode      string
 	MaxOpenConns int
 	MaxIdleConns int
+	CookiesPath  string `yaml:"cookies_path" env:"COOKIES_PATH"`
+}
+
+// GetCookiesPath returns the path to the cookies.txt file
+// If the path is not set or file doesn't exist, returns an empty string
+func (c *Config) GetCookiesPath() string {
+	if c == nil || c.CookiesPath == "" {
+		return ""
+	}
+	// Check if the file exists
+	if _, err := os.Stat(c.CookiesPath); err == nil {
+		return c.CookiesPath
+	}
+	return ""
 }
 
 // DefaultConfig returns a default database configuration
@@ -28,6 +43,7 @@ func DefaultConfig() *Config {
 		SSLMode:      "disable",
 		MaxOpenConns: 25,
 		MaxIdleConns: 5,
+		CookiesPath:  "cookies.txt",
 	}
 }
 

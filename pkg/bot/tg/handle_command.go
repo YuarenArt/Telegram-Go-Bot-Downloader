@@ -9,6 +9,7 @@ import (
 	"os"
 	"time"
 	"youtube_downloader/pkg/bot/tg/send"
+	"youtube_downloader/pkg/database/models"
 )
 
 const (
@@ -71,7 +72,24 @@ func (tb *TgBot) sendPayOptions(message *tgbotapi.Message) {
 
 // processPayment processes the payment based on the selected subscription type
 func (tb *TgBot) processPayment(message *tgbotapi.Message, subscriptionType string) {
-	lang := "en"
+	lang := message.From.LanguageCode
+	if tb.Client == nil {
+		errMsg := "Database client is not initialized"
+		log.Println(errMsg)
+		send.SendReplyMessage(tb.Bot, message, &errMsg)
+		return
+	}
+
+	switch subscriptionType {
+	case payMonth, payYear, payLifetime:
+		tb.sendInvoice(message, subscriptionType, lang)
+	default:
+		tb.sendPayOptions(message)
+	}
+}
+
+// sendInvoice sends an invoice to the user
+func (tb *TgBot) sendInvoice(message *tgbotapi.Message, subscriptionType string, lang string) {
 	subscriptions := map[string]struct {
 		Title       string
 		Description string
@@ -136,50 +154,70 @@ func (tb *TgBot) processPayment(message *tgbotapi.Message, subscriptionType stri
 }
 
 func (tb *TgBot) handleSuccessfulPayment(message *tgbotapi.Message) {
+	if tb.Client == nil {
+		errMsg := "Database client is not initialized"
+		log.Println(errMsg)
+		send.SendMessage(tb.Bot, message, errMsg)
+		return
+	}
+
 	log.Printf("Successful payment from %s, amount: %d", message.From.UserName, message.SuccessfulPayment.TotalAmount)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
-	user, err := tb.Client.GetUser(ctx, message.From.UserName)
-	if err != nil || user == nil {
-		log.Printf("Can't get user: %s, error: %s ", message.From.UserName, err.Error())
+	username := message.From.UserName
+	if username == "" {
+		username = fmt.Sprintf("user_%d", message.From.ID)
 	}
 
-	lang := message.From.LanguageCode
-	payload := message.SuccessfulPayment.InvoicePayload
-	user.Subscription.SubscriptionStatus = "active"
-
-	now := time.Now() // Get current time
-
-	if user.Subscription.EndSubscription.Before(now) {
-		// If subscription has already ended, add duration to current time
-		user.Subscription.EndSubscription = addDurationToTime(now, payload)
-	} else {
-		// If subscription is still active, add duration to the end of the subscription
-		user.Subscription.EndSubscription = addDurationToTime(user.Subscription.EndSubscription, payload)
-	}
-
-	err = tb.Client.UpdateSubscription(ctx, user)
+	// Get current subscription status
+	status, err := tb.Client.GetSubscriptionStatus(ctx, username)
 	if err != nil {
-		log.Printf("Error updating user subscription: %s", err.Error())
-		send.SendMessage(tb.Bot, message, tb.translations[lang]["errorUpdatingSubscription"])
+		log.Printf("Error getting subscription status: %v", err)
+		send.SendMessage(tb.Bot, message, tb.translations[message.From.LanguageCode]["errorGettingSubscription"])
 		return
 	}
 
-	send.SendMessage(tb.Bot, message, tb.translations[lang]["thankYouForPayment"])
-}
-
-func addDurationToTime(t time.Time, duration string) time.Time {
-	switch duration {
-	case "month":
-		return t.AddDate(0, 1, 0)
-	case "year":
-		return t.AddDate(1, 0, 0)
-	case "lifetime":
-		return t.AddDate(900, 0, 0)
+	// Check if the subscription is still active
+	now := time.Now()
+	isActive := now.Before(status.EndSubscription)
+	if isActive {
+		log.Printf("User %s already has an active subscription", username)
+		send.SendMessage(tb.Bot, message, tb.translations[message.From.LanguageCode]["subscriptionAlreadyActive"])
+		return
 	}
-	return t
+
+	// Calculate new subscription end time
+	endTime := now
+	switch message.SuccessfulPayment.InvoicePayload {
+	case payMonth:
+		endTime = now.AddDate(0, 1, 0)
+	case payYear:
+		endTime = now.AddDate(1, 0, 0)
+	case payLifetime:
+		endTime = now.AddDate(900, 0, 0)
+	}
+
+	// Update user subscription
+	updateUser := &models.User{
+		Username: username,
+		ChatID:   message.From.ID,
+		Subscription: models.Subscription{
+			Duration:          message.SuccessfulPayment.InvoicePayload,
+			StartSubscription: now,
+			EndSubscription:   endTime,
+		},
+	}
+
+	err = tb.Client.UpdateSubscription(ctx, updateUser)
+	if err != nil {
+		log.Printf("Error updating user subscription: %s", err.Error())
+		send.SendMessage(tb.Bot, message, tb.translations[message.From.LanguageCode]["errorUpdatingSubscription"])
+		return
+	}
+
+	send.SendMessage(tb.Bot, message, tb.translations[message.From.LanguageCode]["thankYouForPayment"])
 }
 
 // handleStartCommand sends a message with startMessage text
@@ -197,24 +235,47 @@ func (tb *TgBot) handleDefaultCommand(message *tgbotapi.Message, lang string) er
 	return send.SendMessage(tb.Bot, message, tb.translations[lang]["defaultMessage"])
 }
 
-// UserStatus send user's subscription status and subscription expiration date if active
+// UserStatus sends the user's subscription status and subscription expiration date if active
 func (tb *TgBot) UserStatus(message *tgbotapi.Message, lang string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
-
-	user, err := tb.Client.GetUser(ctx, message.From.UserName)
-	if err != nil || user == nil {
-		log.Println("can't get user: " + message.From.UserName)
-		return send.SendMessage(tb.Bot, message, tb.translations[lang]["errorFindStatus"])
+	if tb.Client == nil {
+		errMsg := "Database client is not initialized"
+		log.Println(errMsg)
+		send.SendReplyMessage(tb.Bot, message, &errMsg)
+		return fmt.Errorf(errMsg)
 	}
 
-	statusText := tb.translations[lang]["userStatus"]
-	expireText := tb.translations[lang]["expireSubscription"]
-
-	text := fmt.Sprintf("%s %s.", statusText, user.Subscription.SubscriptionStatus)
-	if user.Subscription.SubscriptionStatus == "active" {
-		text += fmt.Sprintf(" %s %s", expireText, user.Subscription.EndSubscription.Format("2006-01-02"))
+	if message == nil || message.From == nil {
+		errMsg := "invalid message or user information"
+		send.SendReplyMessage(tb.Bot, message, &errMsg)
+		return fmt.Errorf(errMsg)
 	}
 
-	return send.SendMessage(tb.Bot, message, text)
+	username := message.From.UserName
+	if username == "" {
+		username = fmt.Sprintf("user_%d", message.From.ID)
+	}
+
+	status, err := tb.Client.GetSubscriptionStatus(context.Background(), username)
+	if err != nil {
+		errMsg := fmt.Sprintf("Error getting subscription status: %v", err)
+		send.SendReplyMessage(tb.Bot, message, &errMsg)
+		return fmt.Errorf("error getting subscription status: %w", err)
+	}
+
+	now := time.Now()
+	isActive := now.Before(status.EndSubscription)
+
+	var statusText string
+	if isActive {
+		expiresAt := status.EndSubscription.Format("2006-01-02 15:04:05")
+		statusText = fmt.Sprintf("✅ %s\n%s: %s",
+			tb.translations[lang]["subscriptionActive"],
+			tb.translations[lang]["expiresAt"],
+			expiresAt)
+	} else {
+		statusText = tb.translations[lang]["noActiveSubscription"]
+	}
+
+	send.SendReplyMessage(tb.Bot, message, &statusText)
+	return nil
 }

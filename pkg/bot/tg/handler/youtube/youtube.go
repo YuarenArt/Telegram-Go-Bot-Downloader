@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"youtube_downloader/pkg/database-client"
 	"youtube_downloader/pkg/downloader/youtube"
 	"youtube_downloader/pkg/downloader/youtube/ytdl"
 
@@ -25,6 +26,7 @@ const (
 // YoutubeHandler is a service for downloading video from youtube
 type YoutubeHandler struct {
 	Downloader youtube.Downloader
+	Client     *database_client.Client
 }
 
 // groupKey group formats by (height, container, type)
@@ -35,12 +37,14 @@ type groupKey struct {
 }
 
 // NewYoutubeHandler return new YoutubeHandler
-func NewYoutubeHandler(downloader youtube.Downloader) *YoutubeHandler {
+// cookiesPath is optional. If empty, cookies will not be used.
+func NewYoutubeHandler(downloader youtube.Downloader, client *database_client.Client, cookiesPath string) *YoutubeHandler {
 	if downloader == nil {
-		downloader = ytdl.NewYTDLBackend()
+		downloader = ytdl.NewYTDLBackend(cookiesPath)
 	}
 	return &YoutubeHandler{
 		Downloader: downloader,
+		Client:     client,
 	}
 }
 

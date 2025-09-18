@@ -22,7 +22,7 @@ func (tb *TgBot) handleCallbackQuery(callbackQuery *tgbotapi.CallbackQuery) {
 		tb.processPayment(callbackQuery.Message, subscriptionType)
 	case isYoutubeLink(data):
 		tr := tb.translations[lang]
-		tb.handlers[handler.YoutubeHandler].HandleCallbackQuery(callbackQuery, tb.Bot, tb.Client, &tr)
+		tb.handlers[handler.YoutubeHandler].HandleCallbackQuery(callbackQuery, tb.Bot, &tr)
 	default:
 		log.Printf("handleCallbackQuery get default case with %s link", data)
 		somethingWentWrong := tb.translations[lang]["somethingWentWrong"]

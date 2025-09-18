@@ -6,7 +6,6 @@ import (
 	"log"
 	"strings"
 	"youtube_downloader/pkg/bot/tg/send"
-	database_client "youtube_downloader/pkg/database-client"
 	"youtube_downloader/pkg/downloader/youtube"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -14,7 +13,7 @@ import (
 
 // processPlaylistAudio downloads all videos from playlist in audio format
 func (yh *YoutubeHandler) processPlaylistAudio(bot *tgbotapi.BotAPI, callbackQuery *tgbotapi.CallbackQuery,
-	playlist *youtube.Playlist, client *database_client.Client, translations *map[string]string) {
+	playlist *youtube.Playlist, translations *map[string]string) {
 
 	if playlist == nil || len(playlist.Videos) == 0 {
 		log.Println("Empty playlist for audio processing")
@@ -22,7 +21,7 @@ func (yh *YoutubeHandler) processPlaylistAudio(bot *tgbotapi.BotAPI, callbackQue
 	}
 
 	for _, video := range playlist.Videos {
-		if err := yh.processSingleVideoAudio(bot, callbackQuery, video, client, translations); err != nil {
+		if err := yh.processSingleVideoAudio(bot, callbackQuery, video, translations); err != nil {
 			log.Printf("Failed to process video %s: %v", video.ID, err)
 			continue
 		}
@@ -31,7 +30,7 @@ func (yh *YoutubeHandler) processPlaylistAudio(bot *tgbotapi.BotAPI, callbackQue
 
 // processPlaylistVideo downloads all videos from playlist in video format
 func (yh *YoutubeHandler) processPlaylistVideo(bot *tgbotapi.BotAPI, callbackQuery *tgbotapi.CallbackQuery,
-	playlist *youtube.Playlist, client *database_client.Client, translations *map[string]string) {
+	playlist *youtube.Playlist, translations *map[string]string) {
 
 	if playlist == nil || len(playlist.Videos) == 0 {
 		log.Println("Empty playlist for video processing")
@@ -39,7 +38,7 @@ func (yh *YoutubeHandler) processPlaylistVideo(bot *tgbotapi.BotAPI, callbackQue
 	}
 
 	for _, video := range playlist.Videos {
-		if err := yh.processSingleVideoVideo(bot, callbackQuery, video, client, translations); err != nil {
+		if err := yh.processSingleVideoVideo(bot, callbackQuery, video, translations); err != nil {
 			log.Printf("Failed to process video %s: %v", video.ID, err)
 			continue
 		}
@@ -48,7 +47,7 @@ func (yh *YoutubeHandler) processPlaylistVideo(bot *tgbotapi.BotAPI, callbackQue
 
 // processSingleVideoAudio processes a single video for audio download
 func (yh *YoutubeHandler) processSingleVideoAudio(bot *tgbotapi.BotAPI, callbackQuery *tgbotapi.CallbackQuery,
-	video *youtube.Video, client *database_client.Client, translations *map[string]string) error {
+	video *youtube.Video, translations *map[string]string) error {
 
 	if video == nil {
 		return fmt.Errorf("video is nil")
@@ -77,13 +76,13 @@ func (yh *YoutubeHandler) processSingleVideoAudio(bot *tgbotapi.BotAPI, callback
 	}
 
 	// start sending
-	go sendAnswer(bot, callbackQuery, &resp, &path, client, nil, translations)
+	yh.sendAnswer(bot, callbackQuery, &resp, &path, nil, translations)
 	return nil
 }
 
 // processSingleVideoVideo processes a single video for video download
 func (yh *YoutubeHandler) processSingleVideoVideo(bot *tgbotapi.BotAPI, callbackQuery *tgbotapi.CallbackQuery,
-	video *youtube.Video, client *database_client.Client, translations *map[string]string) error {
+	video *youtube.Video, translations *map[string]string) error {
 
 	if video == nil {
 		return fmt.Errorf("video is nil")
@@ -112,7 +111,7 @@ func (yh *YoutubeHandler) processSingleVideoVideo(bot *tgbotapi.BotAPI, callback
 	}
 
 	// start sending
-	go sendAnswer(bot, callbackQuery, &resp, &path, client, nil, translations)
+	yh.sendAnswer(bot, callbackQuery, &resp, &path, nil, translations)
 	return nil
 }
 
