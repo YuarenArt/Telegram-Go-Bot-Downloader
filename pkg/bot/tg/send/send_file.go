@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 	youtube_downloader "youtube_downloader/pkg/downloader/youtube/ytdl"
@@ -56,7 +55,10 @@ func sendVideo(bot *tgbotapi.BotAPI, chatID int64, MessageID int, filePath strin
 	video := tgbotapi.NewVideo(chatID, tgbotapi.FilePath(filePath))
 	video.ReplyToMessageID = MessageID
 
-	videoName := path.Base(filePath)
+	// Get just the filename without path or extension
+	filename := filepath.Base(filePath)
+	ext := filepath.Ext(filename)
+	videoName := filename[0 : len(filename)-len(ext)]
 	video.Caption = videoName
 
 	_, err := bot.Send(video)
@@ -89,7 +91,10 @@ func sendAudio(bot *tgbotapi.BotAPI, chatID int64, MessageID int, filePath strin
 	audio := tgbotapi.NewAudio(chatID, tgbotapi.FilePath(actualFilePath))
 	audio.ReplyToMessageID = MessageID
 
-	audioName := path.Base(actualFilePath)
+	// Get just the filename without path or extension
+	filename := filepath.Base(actualFilePath)
+	ext := filepath.Ext(filename)
+	audioName := filename[0 : len(filename)-len(ext)]
 	audio.Caption = audioName
 
 	_, err = bot.Send(audio)

@@ -133,11 +133,17 @@ func (yh *YoutubeHandler) HandleCallbackQueryWithFormats(callbackQuery *tgbotapi
 		filename += "_audio"
 	}
 
-	// Create a temporary directory for downloads if it doesn't exist
-	tempDir := filepath.Join(os.TempDir(), "youtube-dl-bot")
-	if err := os.MkdirAll(tempDir, 0755); err != nil {
-		log.Printf("Failed to create temp directory: %v", err)
-		errorMsg := "❌ Internal server error. Please try again later."
+	wd, err := os.Getwd()
+	if err != nil {
+		log.Fatal(err)
+	}
+	downloadDir := filepath.Join(wd, "download")
+	log.Printf("Download directory: %s", downloadDir)
+
+	// Create download directory if it doesn't exist
+	if err := os.MkdirAll(downloadDir, 0755); err != nil {
+		log.Printf("Failed to create download directory: %v", err)
+		errorMsg := "❌ Failed to create download directory. Please check permissions."
 		send.SendEditMessage(bot, processing.Chat.ID, processing.MessageID, &errorMsg)
 		return
 	}
@@ -153,7 +159,7 @@ func (yh *YoutubeHandler) HandleCallbackQueryWithFormats(callbackQuery *tgbotapi
 		Format:    formatFile.FormatID,
 		AudioOnly: formatFile.AudioOnly,
 		Filename:  filename,
-		OutputDir: tempDir,
+		OutputDir: downloadDir,
 	}
 
 	// Download the file
@@ -169,7 +175,7 @@ func (yh *YoutubeHandler) HandleCallbackQueryWithFormats(callbackQuery *tgbotapi
 	}
 
 	// Send the file to the user
-	go yh.sendAnswer(bot, callbackQuery, processing, &pathAndName, nil, translations)
+	go yh.sendAnswer(bot, callbackQuery, &processing, &pathAndName, nil, translations)
 }
 
 // findFormatByItag finds a format by its itag number
@@ -225,11 +231,27 @@ func (yh *YoutubeHandler) HandleCallbackQueryWithPlaylist(callbackQuery *tgbotap
 	}
 }
 
+// deleteFile safely removes a file and logs the operation
 func deleteFile(pathToFile string) error {
 	if pathToFile == "" {
 		return nil
 	}
-	return os.Remove(pathToFile)
+
+	// Check if file exists before trying to delete
+	if _, err := os.Stat(pathToFile); os.IsNotExist(err) {
+		log.Printf("File not found for deletion: %s", pathToFile)
+		return nil
+	}
+
+	// Try to remove the file
+	err := os.Remove(pathToFile)
+	if err != nil {
+		log.Printf("Error deleting file %s: %v", pathToFile, err)
+		return fmt.Errorf("failed to delete file %s: %w", pathToFile, err)
+	}
+
+	log.Printf("Successfully deleted file: %s", pathToFile)
+	return nil
 }
 
 // sendAnswer sends the downloaded file to the user and handles cleanup
